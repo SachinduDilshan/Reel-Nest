@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>HomiTube</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; media-src media: blob:; style-src 'self' 'unsafe-inline'; connect-src 'self' media:">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header id="nav">
+    <div class="logo">HomiTube</div>
+    <nav>
+      <a data-v="home" class="on">Home</a>
+      <a data-v="movies">Movies</a>
+      <a data-v="tv">TV Shows</a>
+    </nav>
+    <div class="sp"></div>
+    <input id="q" placeholder="Search titles">
+    <button id="folders">Folders</button>
+    <button id="add" class="red">Add folder</button>
+  </header>
+
+  <main id="main"></main>
+  <div id="modal" class="hidden"></div>
+
+  <div id="player" class="hidden ui">
+    <video id="v" crossorigin="anonymous"></video>
+    <div id="ptop"><button id="back" title="Back (Esc)">←</button><span id="ptitle"></span></div>
+    <div id="perr" class="hidden"></div>
+    <div id="pbar">
+      <div id="seek"><div id="fill"></div></div>
+      <div class="prow">
+        <button id="pp" title="Play / pause (Space)">▶</button>
+        <button id="b10" title="Back 10s (J)">−10</button>
+        <button id="f10" title="Forward 10s (L)">+10</button>
+        <button id="mute" title="Mute (M)">Vol</button>
+        <input id="vol" type="range" min="0" max="1" step="0.05" value="1">
+        <span id="time">0:00 / 0:00</span>
+        <span class="sp"></span>
+        <button id="nxt" title="Next episode (N)">Next episode</button>
+        <button id="cc" title="Subtitles (C)">CC</button>
+        <button id="spd" title="Speed">1×</button>
+        <button id="fs" title="Fullscreen (F)">Full</button>
+      </div>
+    </div>
+  </div>
+  <script src="renderer.js"></script>
+</body>
+</html>

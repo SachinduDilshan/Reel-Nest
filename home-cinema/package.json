@@ -1,0 +1,20 @@
+{
+  "name": "home-cinema",
+  "version": "1.0.0",
+  "description": "Offline Netflix-style player for your local videos",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "local.homecinema",
+    "productName": "Home Cinema",
+    "files": ["main.js", "preload.js", "index.html", "style.css", "renderer.js"],
+    "win": { "target": "nsis" }
+  }
+}
