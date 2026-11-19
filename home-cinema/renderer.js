@@ -908,11 +908,47 @@ let ext = null;       // { name } while an external audio file is active
 let audioDelay = 0;   // seconds (positive = audio plays later)
 let note = '';
 let noteT;
+let subsBusy = false;    // reading subtitles embedded in the video file
+let subsInfo = '';       // short status text shown in the menu
+let subTouched = false;  // user picked a subtitle manually (disables auto-select)
+
+// Subtitle text size in percent (remembered between sessions).
+let subSize = (() => {
+  const n = parseInt(localStorage.getItem('subSize'), 10);
+
+  return n >= 40 && n <= 250 ? n : 100;
+})();
+
+const cueStyle = document.createElement('style');
+document.head.append(cueStyle);
+
+function applySubSize() {
+  // vh keeps the text proportional in a window and in fullscreen.
+  cueStyle.textContent =
+    `#v::cue { font-size: ${(2.6 * subSize / 100).toFixed(2)}vh; background: #000a; }`;
+
+  try {
+    localStorage.setItem('subSize', String(subSize));
+  } catch {}
+}
+
+function changeSubSize(delta) {
+  subSize = Math.max(40, Math.min(250, subSize + delta));
+
+  applySubSize();
+
+  if (menuOpen()) renderMenu();
+}
+
+applySubSize();
 
 const menuOpen = () => !$('#tmenu').classList.contains('hidden');
 const closeMenu = () => $('#tmenu').classList.add('hidden');
 const fmtOff = d => (d >= 0 ? '+' : '') + d.toFixed(1) + 's';
-const updateBtn = () => $('#cc').classList.toggle('on', ccIdx >= 0 || !!ext);
+const updateBtn = () => {
+  $('#cc').classList.toggle('on', ccIdx >= 0 || !!ext);
+  $('#cc').textContent = subsBusy ? 'Loading subs…' : 'Subs & Audio';
+};
 
 const nextEp = () => {
   const i = queue.indexOf(cur);
@@ -971,7 +1007,9 @@ function applyDelay(track) {
   track._shift = subDelay;
 }
 
-function selectSub(idx) {
+function selectSub(idx, auto = false) {
+  if (!auto) subTouched = true;
+
   ccIdx = idx;
 
   subList.forEach((s, i) => {
@@ -1003,6 +1041,50 @@ async function loadSubs(it) {
     addSub(p.split(/[\\/]/).pop(), text);
   }
 
+  if (menuOpen()) renderMenu();
+}
+
+// Subtitles stored inside the video file (e.g. MKV). The browser can't show
+// these, so the main process extracts them with ffmpeg and caches the result.
+async function loadEmbedded(it) {
+  subsBusy = true;
+  subsInfo = '';
+  updateBtn();
+  if (menuOpen()) renderMenu();
+
+  let r;
+
+  try {
+    r = await api.embeddedSubs(it.id);
+  } catch {
+    r = { tracks: [], skipped: 0 };
+  }
+
+  if (cur !== it) return;
+
+  subsBusy = false;
+
+  const first = subList.length;
+
+  r.tracks.forEach(t => addSub(t.label, t.text));
+
+  if (r.missing) {
+    subsInfo = 'Embedded subtitles need ffmpeg. Run “npm install ffmpeg-static” in the project folder and restart.';
+  } else if (r.skipped) {
+    subsInfo = `${r.skipped} image-based subtitle track${r.skipped > 1 ? 's' : ''} (PGS/DVD) in this file can’t be shown.`;
+  } else if (!subList.length) {
+    subsInfo = 'No subtitles found in this file.';
+  }
+
+  // Turn on the default track automatically (like most players do).
+  if (!subTouched && ccIdx < 0 && r.tracks.length) {
+    const d = r.tracks.findIndex(t => t.def);
+    const pick = d >= 0 ? d : (r.tracks.length === 1 ? 0 : -1);
+
+    if (pick >= 0) selectSub(first + pick, true);
+  }
+
+  updateBtn();
   if (menuOpen()) renderMenu();
 }
 
@@ -1133,11 +1215,18 @@ function renderMenu() {
       ${row('s:-1', 'Off', ccIdx < 0)}
       ${subList.map((s, i) => row('s:' + i, s.label, ccIdx === i)).join('')}
       ${row('s:add', 'Load subtitle file…', false)}
+      ${subsBusy || subsInfo ? `<p class="tstat">${esc(subsBusy ? 'Reading subtitles from the video…' : subsInfo)}</p>` : ''}
       <div class="sync">
         Delay
         <button data-a="sd:-0.5">−</button>
         <b>${fmtOff(subDelay)}</b>
         <button data-a="sd:0.5">+</button>
+      </div>
+      <div class="sync">
+        Size
+        <button data-a="sz:-10">−</button>
+        <b>${subSize}%</b>
+        <button data-a="sz:10">+</button>
       </div>
     </div>
     <div class="mcol">
@@ -1167,6 +1256,10 @@ $('#tmenu').onclick = e => {
   if (k === 's') {
     if (val === 'add') pickSub();
     else selectSub(+val);
+  }
+
+  else if (k === 'sz') {
+    changeSubSize(+val);
   }
 
   else if (k === 'sd') {
@@ -1211,6 +1304,9 @@ function resetTracks() {
   ccIdx = -1;
   subDelay = 0;
   note = '';
+  subsBusy = false;
+  subsInfo = '';
+  subTouched = false;
 
   clearExt();
   closeMenu();
@@ -1251,6 +1347,7 @@ async function play(it, q = []) {
   showCtl();
 
   loadSubs(it);
+  loadEmbedded(it);
 }
 
 function save() {
@@ -1462,6 +1559,8 @@ document.addEventListener('keydown', e => {
   else if (k === 'm') toggleMute();
   else if (k === 'n') goNext();
   else if (k === 'c') cycleCC();
+  else if (k === '[') changeSubSize(-10);
+  else if (k === ']') changeSubSize(10);
 
   else if (k === 'escape') {
     if (!document.fullscreenElement) closePlayer();

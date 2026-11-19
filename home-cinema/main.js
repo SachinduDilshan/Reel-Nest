@@ -8,13 +8,17 @@ const {
   shell
 } = require('electron');
 
-app.commandLine.appendSwitch('enable-blink-features', 'AudioVideoTracks');
-
 const path = require('path');
+const fs = require('fs');
 const fsp = require('fs/promises');
 const { createReadStream } = require('fs');
 const { Readable } = require('stream');
+const crypto = require('crypto');
+const { spawn } = require('child_process');
 const chokidar = require('chokidar');
+
+// Lets the player switch between audio tracks inside a video.
+app.commandLine.appendSwitch('enable-blink-features', 'AudioVideoTracks');
 
 // Register the media protocol before app initialization.
 protocol.registerSchemesAsPrivileged([
@@ -41,18 +45,24 @@ const VIDEO = {
   '.avi': 'video/x-msvideo'
 };
 
-// Supported subtitle formats.
-const SUB = new Set(['.srt', '.vtt']);
-
-// Audio formats the player can load from outside the library folders.
+// Audio formats that can be loaded manually from anywhere on the laptop.
 const AUDIO = {
-  '.mp3': 'audio/mpeg', '.aac': 'audio/aac', '.m4a': 'audio/mp4',
-  '.ogg': 'audio/ogg', '.opus': 'audio/ogg', '.wav': 'audio/wav',
-  '.flac': 'audio/flac', '.mka': 'audio/webm', '.webm': 'audio/webm'
+  '.mp3': 'audio/mpeg',
+  '.aac': 'audio/aac',
+  '.m4a': 'audio/mp4',
+  '.ogg': 'audio/ogg',
+  '.opus': 'audio/ogg',
+  '.wav': 'audio/wav',
+  '.flac': 'audio/flac',
+  '.mka': 'audio/webm',
+  '.webm': 'audio/webm'
 };
 
 // Files the user picked manually through a dialog.
 const granted = new Set();
+
+// Supported subtitle formats.
+const SUB = new Set(['.srt', '.vtt']);
 
 const cfgFile = () =>
   path.join(app.getPath('userData'), 'library.json');
@@ -92,8 +102,8 @@ async function loadCfg() {
     return {
       folders: Array.isArray(config.folders)
         ? config.folders.filter(
-          folder => typeof folder === 'string'
-        )
+            folder => typeof folder === 'string'
+          )
         : []
     };
   } catch {
@@ -191,6 +201,198 @@ async function scan() {
 }
 
 /* ---------------------------------
+   EMBEDDED SUBTITLES (via ffmpeg)
+---------------------------------- */
+
+let FFMPEG = 'ffmpeg';
+
+try {
+  // Bundled ffmpeg (npm install ffmpeg-static). Falls back to a system ffmpeg.
+  FFMPEG = require('ffmpeg-static').replace('app.asar', 'app.asar.unpacked');
+} catch {}
+
+// Image-based subtitle formats can't be converted to text.
+const BITMAP_SUBS = /pgs|dvd_subtitle|dvb_subtitle|xsub/i;
+
+const LANG_B2 = {
+  fre: 'fr', ger: 'de', chi: 'zh', dut: 'nl', gre: 'el', cze: 'cs',
+  per: 'fa', rum: 'ro', slo: 'sk', may: 'ms', ice: 'is', wel: 'cy'
+};
+
+function langName(code) {
+  if (!code || code === 'und') return '';
+
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'language' })
+      .of(LANG_B2[code] || code) || code;
+  } catch {
+    return code;
+  }
+}
+
+function runFfmpeg(args, timeout) {
+  return new Promise(resolve => {
+    const chunks = [];
+    let proc;
+    let done = false;
+    let missing = false;
+
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      resolve({ err: Buffer.concat(chunks).toString(), missing });
+    };
+
+    const timer = setTimeout(() => proc && proc.kill(), timeout);
+
+    try {
+      proc = spawn(FFMPEG, args, {
+        windowsHide: true,
+        stdio: ['ignore', 'ignore', 'pipe']
+      });
+    } catch {
+      missing = true;
+      return finish();
+    }
+
+    proc.stderr.on('data', d => chunks.push(d));
+    proc.on('error', () => { missing = true; finish(); });
+    proc.on('close', finish);
+  });
+}
+
+// Reads ffmpeg's "-i" report and lists the subtitle streams in order.
+function parseSubStreams(report) {
+  const out = [];
+  let curStream = null;
+
+  for (const line of report.split(/\r?\n/)) {
+    const m = /^\s*Stream #\d+:\d+(?:\[[^\]]*\])?(?:\((\w+)\))?: (\w+): (.*)$/.exec(line);
+
+    if (m) {
+      if (m[2] === 'Subtitle') {
+        curStream = {
+          n: out.length,                       // index for -map 0:s:n
+          lang: m[1] || '',
+          codec: m[3].split(/[\s,(]/)[0],
+          def: /\(default\)/.test(m[3]),
+          forced: /\(forced\)/.test(m[3]),
+          title: ''
+        };
+
+        out.push(curStream);
+      } else {
+        curStream = null;
+      }
+
+      continue;
+    }
+
+    if (/^\s*Chapter #/.test(line)) curStream = null;
+
+    if (curStream) {
+      const t = /^\s+title\s*:\s*(.+)$/.exec(line);
+      if (t) curStream.title = t[1].trim();
+    }
+  }
+
+  return out;
+}
+
+function subLabel(s) {
+  const name = langName(s.lang) || `Track ${s.n + 1}`;
+  const parts = [name];
+
+  if (s.title && s.title.toLowerCase() !== name.toLowerCase()) {
+    parts.push(s.title);
+  }
+
+  return parts.join(' – ') + (s.forced ? ' (forced)' : '') + ' (embedded)';
+}
+
+async function extractSubs(file, cacheRoot) {
+  const st = await fsp.stat(file);
+
+  const key = crypto
+    .createHash('sha1')
+    .update(`${file}|${st.size}|${st.mtimeMs}`)
+    .digest('hex');
+
+  const dir = path.join(cacheRoot, key);
+  const manifestPath = path.join(dir, 'manifest.json');
+
+  const readTracks = async list => {
+    const tracks = [];
+
+    for (const s of list) {
+      try {
+        const text = await fsp.readFile(path.join(dir, `s${s.n}.vtt`), 'utf8');
+
+        if (text.trim().length > 10) {
+          tracks.push({ label: subLabel(s), text, def: s.def });
+        }
+      } catch {}
+    }
+
+    return tracks;
+  };
+
+  // Already extracted earlier? Use the cache.
+  try {
+    const manifest = JSON.parse(await fsp.readFile(manifestPath, 'utf8'));
+
+    return {
+      tracks: await readTracks(manifest.tracks),
+      skipped: manifest.skipped
+    };
+  } catch {}
+
+  const info = await runFfmpeg(['-hide_banner', '-i', file], 30000);
+
+  if (info.missing) return { tracks: [], skipped: 0, missing: true };
+
+  const all = parseSubStreams(info.err);
+  const text = all.filter(s => !BITMAP_SUBS.test(s.codec));
+  const skipped = all.length - text.length;
+
+  if (!text.length) return { tracks: [], skipped };
+
+  await fsp.mkdir(dir, { recursive: true });
+
+  // One pass over the file writes every text subtitle track as WebVTT.
+  const args = ['-hide_banner', '-loglevel', 'error', '-nostdin', '-y', '-i', file];
+
+  text.forEach(s => {
+    args.push('-map', `0:s:${s.n}`, '-f', 'webvtt', path.join(dir, `s${s.n}.vtt`));
+  });
+
+  await runFfmpeg(args, 10 * 60 * 1000);
+
+  const tracks = await readTracks(text);
+
+  // Only cache a complete result.
+  if (tracks.length === text.length) {
+    await fsp.writeFile(manifestPath, JSON.stringify({ skipped, tracks: text }));
+  }
+
+  return { tracks, skipped };
+}
+
+const subJobs = new Map();
+
+function embeddedSubs(file, cacheRoot) {
+  if (!subJobs.has(file)) {
+    subJobs.set(
+      file,
+      extractSubs(file, cacheRoot).finally(() => subJobs.delete(file))
+    );
+  }
+
+  return subJobs.get(file);
+}
+
+/* ---------------------------------
    AUTOMATIC LIBRARY WATCHER
 ---------------------------------- */
 
@@ -268,6 +470,9 @@ function setupLibraryWatcher() {
 function createWindow() {
   Menu.setApplicationMenu(null);
 
+  // Use build/icon.png as the window icon when it exists.
+  const iconPath = path.join(__dirname, 'build', 'icon.png');
+
   const win = new BrowserWindow({
     width: 1400,
     height: 860,
@@ -278,6 +483,8 @@ function createWindow() {
     backgroundColor: '#0c0c10',
     title: 'ReelNest',
 
+    ...(fs.existsSync(iconPath) ? { icon: iconPath } : {}),
+
     autoHideMenuBar: true,
 
     webPreferences: {
@@ -285,9 +492,7 @@ function createWindow() {
 
       contextIsolation: true,
       nodeIntegration: false
-    },
-
-    icon: path.join(__dirname, 'build', 'icon.png'),
+    }
   });
 
   mainWindow = win;
@@ -352,19 +557,28 @@ app.whenReady().then(async () => {
 
       const config = await loadCfg();
 
+      // Library files, plus audio files the user picked manually.
+      const isGranted = granted.has(filePath);
+
       const allowed =
-        granted.has(filePath) ||
-        config.folders.some(folder => isInsideFolder(filePath, folder));
+        isGranted ||
+        config.folders.some(folder =>
+          isInsideFolder(filePath, folder)
+        );
 
       if (!allowed) {
-        return new Response('Forbidden', { status: 403 });
+        return new Response('Forbidden', {
+          status: 403
+        });
       }
 
       const ext = path.extname(filePath).toLowerCase();
-      const mime = granted.has(filePath) ? AUDIO[ext] : VIDEO[ext];
+      const mime = isGranted ? AUDIO[ext] : VIDEO[ext];
 
       if (!mime) {
-        return new Response('Unsupported media type', { status: 415 });
+        return new Response('Unsupported media type', {
+          status: 415
+        });
       }
 
       const stats = await fsp.stat(filePath);
@@ -529,7 +743,7 @@ app.whenReady().then(async () => {
     return scan();
   });
 
-  // Read subtitle files.
+  // Read subtitle files that sit next to a video.
   ipcMain.handle('text:read', async (_event, filePath) => {
     if (typeof filePath !== 'string') {
       return '';
@@ -557,18 +771,18 @@ app.whenReady().then(async () => {
 
   // Pick a subtitle file from anywhere on the laptop.
   ipcMain.handle('sub:pick', async () => {
-    const r = await dialog.showOpenDialog(mainWindow, {
+    const result = await dialog.showOpenDialog(mainWindow, {
       title: 'Choose a subtitle file',
       properties: ['openFile'],
       filters: [{ name: 'Subtitles', extensions: ['srt', 'vtt'] }]
     });
 
-    if (r.canceled || !r.filePaths[0]) return null;
+    if (result.canceled || !result.filePaths[0]) return null;
 
     try {
       return {
-        name: path.basename(r.filePaths[0]),
-        text: await fsp.readFile(r.filePaths[0], 'utf8')
+        name: path.basename(result.filePaths[0]),
+        text: await fsp.readFile(result.filePaths[0], 'utf8')
       };
     } catch {
       return null;
@@ -577,21 +791,50 @@ app.whenReady().then(async () => {
 
   // Pick an external audio file.
   ipcMain.handle('audio:pick', async () => {
-    const r = await dialog.showOpenDialog(mainWindow, {
+    const result = await dialog.showOpenDialog(mainWindow, {
       title: 'Choose an audio file',
       properties: ['openFile'],
-      filters: [{ name: 'Audio', extensions: ['mp3', 'aac', 'm4a', 'ogg', 'opus', 'wav', 'flac', 'mka'] }]
+      filters: [{
+        name: 'Audio',
+        extensions: ['mp3', 'aac', 'm4a', 'ogg', 'opus', 'wav', 'flac', 'mka']
+      }]
     });
 
-    if (r.canceled || !r.filePaths[0]) return null;
+    if (result.canceled || !result.filePaths[0]) return null;
 
-    const p = path.resolve(r.filePaths[0]);
-    granted.add(p);
+    const picked = path.resolve(result.filePaths[0]);
+
+    granted.add(picked);
 
     return {
-      name: path.basename(p),
-      url: 'media://local/' + encodeURIComponent(p)
+      name: path.basename(picked),
+      url: 'media://local/' + encodeURIComponent(picked)
     };
+  });
+
+  // Subtitles stored inside the video file (e.g. MKV).
+  ipcMain.handle('subs:embedded', async (_event, filePath) => {
+    if (typeof filePath !== 'string') {
+      return { tracks: [], skipped: 0 };
+    }
+
+    const resolved = path.resolve(filePath);
+    const config = await loadCfg();
+
+    if (!config.folders.some(folder => isInsideFolder(resolved, folder))) {
+      return { tracks: [], skipped: 0 };
+    }
+
+    try {
+      return await embeddedSubs(
+        resolved,
+        path.join(app.getPath('userData'), 'subs-cache')
+      );
+    } catch (error) {
+      console.error('Embedded subtitle extraction failed:', error);
+
+      return { tracks: [], skipped: 0 };
+    }
   });
 
   // Start watching previously selected folders.

@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('api', {
 
   pickSubtitle: () => ipcRenderer.invoke('sub:pick'),
   pickAudio: () => ipcRenderer.invoke('audio:pick'),
+  embeddedSubs: filePath => ipcRenderer.invoke('subs:embedded', filePath),
 
   // Get all library items.
   getLibrary: () =>
