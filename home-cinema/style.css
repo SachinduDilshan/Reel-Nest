@@ -29,14 +29,14 @@ select {
 button {
   cursor: pointer;
   border: 0;
-  background: rgba(255, 255, 255, .12);
+  background: rgba(255, 255, 255, 0);
   padding: 9px 16px;
   border-radius: 6px;
   transition: background .2s, transform .2s;
 }
 
 button:hover {
-  background: rgba(255, 255, 255, .22);
+  background: rgba(255, 255, 255, 0.014);
 }
 
 button.red {
@@ -45,8 +45,8 @@ button.red {
 }
 
 button.red:hover {
-  background: #f6121d;
-  transform: translateY(-1px);
+  background: #aa040d;
+  transform: scale(1.02);
 }
 
 a {
@@ -863,7 +863,10 @@ h2 {
 }
 
 @keyframes mpop {
-  from { opacity: 0; transform: translateY(8px) scale(.98); }
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(.98);
+  }
 }
 
 /* header + tabs */
@@ -1101,7 +1104,7 @@ h2 {
   padding: 6px 12px 10px;
 }
 
-.field > label {
+.field>label {
   display: block;
   margin-bottom: 7px;
   color: var(--dim);
@@ -1201,4 +1204,76 @@ h2 {
   #tmenu {
     animation: none;
   }
+}
+
+
+/* PLAYER BACK BUTTON */
+
+#back.backbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  height: 44px;
+  padding: 0 13px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .10);
+  border: 1px solid rgba(255, 255, 255, .18);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .35);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  transition: background .2s, border-color .2s, transform .2s, padding .25s, gap .25s;
+}
+
+#back.backbtn svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  transition: transform .2s;
+}
+
+#back.backbtn span {
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 0;
+  transition: max-width .25s ease, opacity .2s;
+}
+
+#back.backbtn:hover,
+#back.backbtn:focus-visible {
+  gap: 8px;
+  padding-right: 18px;
+  background: rgba(255, 255, 255, .22);
+  border-color: rgba(255, 255, 255, .4);
+}
+
+#back.backbtn:hover svg,
+#back.backbtn:focus-visible svg {
+  transform: translateX(-2px);
+}
+
+#back.backbtn:hover span,
+#back.backbtn:focus-visible span {
+  max-width: 60px;
+  opacity: 1;
+}
+
+#back.backbtn:active {
+  transform: scale(.95);
+}
+
+#back.backbtn:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+/* Movie title next to it: one line, with a soft shadow for readability */
+#ptitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, .7);
 }

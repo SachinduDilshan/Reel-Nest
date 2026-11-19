@@ -56,7 +56,7 @@ const prog = JSON.parse(
 const saveProg = () => {
   try {
     localStorage.setItem('prog', JSON.stringify(prog));
-  } catch {}
+  } catch { }
 };
 
 const pct = it => {
@@ -187,7 +187,7 @@ try {
     indexedDB.deleteDatabase('hc');
     localStorage.setItem('hcCleaned', '1');
   }
-} catch {}
+} catch { }
 
 const idbGet = async k => {
   const d = await idb;
@@ -444,8 +444,8 @@ function card(x) {
       <div class="fb">${esc(title)}</div>
       <img alt="">
       ${x.kind !== 'show' && pct(x) > 1
-        ? `<i class="pb"><u style="width:${pct(x)}%"></u></i>`
-        : ''}
+      ? `<i class="pb"><u style="width:${pct(x)}%"></u></i>`
+      : ''}
     </div>
     <div class="ct">${esc(title)}</div>
     <div class="cs">${esc(sub)}</div>`
@@ -504,7 +504,7 @@ const sortPref = (() => {
 const saveSort = () => {
   try {
     localStorage.setItem('sort', JSON.stringify(sortPref));
-  } catch {}
+  } catch { }
 };
 
 const SORTS = {
@@ -757,11 +757,11 @@ function render() {
       res.length
         ? grid(`Results for “${query}”`, res)
         : el(
-            'div',
-            'empty',
-            `<h1>No matches</h1>
+          'div',
+          'empty',
+          `<h1>No matches</h1>
             <p>Nothing in your library matches “${esc(query)}”.</p>`
-          )
+        )
     );
 
     return;
@@ -772,10 +772,10 @@ function render() {
       movies.length
         ? grid('Movies', movies)
         : el(
-            'div',
-            'empty',
-            '<h1>No movies yet</h1><p>Files without an S01E01 style number are treated as movies.</p>'
-          )
+          'div',
+          'empty',
+          '<h1>No movies yet</h1><p>Files without an S01E01 style number are treated as movies.</p>'
+        )
     );
   }
 
@@ -784,10 +784,10 @@ function render() {
       shows.length
         ? grid('TV Shows', shows)
         : el(
-            'div',
-            'empty',
-            '<h1>No TV shows yet</h1><p>Name episodes like Show.Name.S01E03.mkv and they will be grouped by series.</p>'
-          )
+          'div',
+          'empty',
+          '<h1>No TV shows yet</h1><p>Name episodes like Show.Name.S01E03.mkv and they will be grouped by series.</p>'
+        )
     );
   }
 
@@ -867,8 +867,8 @@ function openDetail(x) {
       <div class="cs">
         ${esc(x.file)}
         ${x.subs.length
-          ? ` · ${x.subs.length} subtitle file${x.subs.length > 1 ? 's' : ''}`
-          : ''}
+        ? ` · ${x.subs.length} subtitle file${x.subs.length > 1 ? 's' : ''}`
+        : ''}
       </div>`;
 
     return;
@@ -881,8 +881,8 @@ function openDetail(x) {
   body.innerHTML = `
     <select>
       ${seasons.map(s =>
-        `<option value="${s}">Season ${s}</option>`
-      ).join('')}
+    `<option value="${s}">Season ${s}</option>`
+  ).join('')}
     </select>
     <div class="eps"></div>`;
 
@@ -903,8 +903,8 @@ function openDetail(x) {
             <div>${esc(e.title)}</div>
             <small>${e.dur ? fmtD(e.dur) : ''}</small>
             ${pct(e) > 1
-              ? `<i class="pb"><u style="width:${pct(e)}%"></u></i>`
-              : ''}
+            ? `<i class="pb"><u style="width:${pct(e)}%"></u></i>`
+            : ''}
           </div>`
         );
 
@@ -938,13 +938,13 @@ function foldersModal() {
       <h2>Library folders</h2>
 
       ${folders.length
-        ? folders.map((f, i) =>
-            `<div class="fl">
+      ? folders.map((f, i) =>
+        `<div class="fl">
               <span>${esc(f)}</span>
               <button data-i="${i}">Remove</button>
             </div>`
-          ).join('')
-        : '<p class="cs">No folders added yet.</p>'}
+      ).join('')
+      : '<p class="cs">No folders added yet.</p>'}
 
       <div style="margin-top:16px">
         <button class="red" id="add3">Add folder</button>
@@ -1047,7 +1047,7 @@ function applySubStyle() {
 
   try {
     localStorage.setItem('subStyle', JSON.stringify(subStyle));
-  } catch {}
+  } catch { }
 }
 
 const previewCss = () => {
@@ -1158,7 +1158,7 @@ function selectSub(idx, auto = false) {
         'subPref',
         idx < 0 ? 'off' : baseLang(subList[idx].label)
       );
-    } catch {}
+    } catch { }
   }
 
   ccIdx = idx;
@@ -1302,7 +1302,7 @@ async function pickAudio() {
 
   A.onloadedmetadata = () => {
     syncA();
-    if (!v.paused) A.play().catch(() => {});
+    if (!v.paused) A.play().catch(() => { });
   };
 
   v.muted = true;   // silence the original audio
@@ -1409,13 +1409,12 @@ function subsListHtml() {
 
   if (rows) return rows;
 
-  return `<p class="mempty">${
-    subsBusy
+  return `<p class="mempty">${subsBusy
       ? 'Reading subtitles from the video…'
       : q
         ? `No language matches “${esc(subQuery)}”.`
         : esc(subsInfo || 'No subtitles found for this video.')
-  }</p>`;
+    }</p>`;
 }
 
 function subsBody() {
@@ -1440,12 +1439,12 @@ function audioBody() {
 
   const rows = at.length > 1
     ? at.map((t, i) => {
-        const name =
-          ((t.label || '') + (t.language ? ` (${t.language})` : '')).trim() ||
-          `Track ${i + 1}`;
+      const name =
+        ((t.label || '') + (t.language ? ` (${t.language})` : '')).trim() ||
+        `Track ${i + 1}`;
 
-        return mrow('a:' + i, name, !ext && t.enabled, '');
-      }).join('')
+      return mrow('a:' + i, name, !ext && t.enabled, '');
+    }).join('')
     : mrow('a:orig', 'Original audio', !ext, '');
 
   return `
@@ -1504,8 +1503,8 @@ function renderMenu(opts = {}) {
 
   const body =
     menuTab === 'audio' ? audioBody()
-    : menuTab === 'style' ? styleBody()
-    : subsBody();
+      : menuTab === 'style' ? styleBody()
+        : subsBody();
 
   m.innerHTML = `
     <div class="mhead">
@@ -1663,7 +1662,7 @@ async function play(it, q = []) {
     }
   };
 
-  v.play().catch(() => {});
+  v.play().catch(() => { });
 
   showCtl();
 
@@ -1755,7 +1754,7 @@ v.ontimeupdate = () => {
 
   // Keep external audio locked to the video.
   if (ext && !A.paused &&
-      Math.abs(A.currentTime - (v.currentTime - audioDelay)) > 0.35) {
+    Math.abs(A.currentTime - (v.currentTime - audioDelay)) > 0.35) {
     syncA();
   }
 
@@ -1770,13 +1769,13 @@ v.onplay = v.onpause = () => {
 };
 
 // External audio follows the video.
-v.addEventListener('play', () => { if (ext) A.play().catch(() => {}); });
+v.addEventListener('play', () => { if (ext) A.play().catch(() => { }); });
 v.addEventListener('pause', () => A.pause());
 v.addEventListener('waiting', () => A.pause());
 v.addEventListener('playing', () => {
   if (ext) {
     syncA();
-    A.play().catch(() => {});
+    A.play().catch(() => { });
   }
 });
 v.addEventListener('seeked', () => { if (ext) syncA(); });
@@ -1848,6 +1847,18 @@ $('#seek').onclick = e => {
   v.currentTime =
     (e.clientX - r.left) / r.width * v.duration;
 };
+
+document.querySelectorAll("[data-app]").forEach((button) => {
+  button.addEventListener("click", async () => {
+    const app = button.dataset.app;
+
+    try {
+      await api.openAppLink(app);
+    } catch (error) {
+      console.error(`Failed to open ${app}:`, error);
+    }
+  });
+});
 
 document.addEventListener('keydown', e => {
   // Typing in a search box, or moving a slider, must not trigger shortcuts.
@@ -2018,9 +2029,9 @@ api.onLibraryUpdated(library => {
     const matchingItem = previousId
       ? movies.find(m => m.id === previousId)
       : shows.find(s =>
-          s.name.toLowerCase() ===
-          previousName.toLowerCase()
-        );
+        s.name.toLowerCase() ===
+        previousName.toLowerCase()
+      );
 
     if (matchingItem) {
       featured = matchingItem;

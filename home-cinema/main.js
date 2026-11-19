@@ -109,8 +109,8 @@ async function loadCfg() {
     return {
       folders: Array.isArray(config.folders)
         ? config.folders.filter(
-            folder => typeof folder === 'string'
-          )
+          folder => typeof folder === 'string'
+        )
         : []
     };
   } catch {
@@ -216,7 +216,7 @@ let FFMPEG = 'ffmpeg';
 try {
   // Bundled ffmpeg (npm install ffmpeg-static). Falls back to a system ffmpeg.
   FFMPEG = require('ffmpeg-static').replace('app.asar', 'app.asar.unpacked');
-} catch {}
+} catch { }
 
 // Image-based subtitle formats can't be converted to text.
 const BITMAP_SUBS = /pgs|dvd_subtitle|dvb_subtitle|xsub/i;
@@ -334,7 +334,7 @@ async function extractSubs(file, cacheRoot) {
     try {
       const zipped = await fsp.readFile(path.join(dir, `s${n}.vtt.gz`));
       return (await gunzip(zipped)).toString('utf8');
-    } catch {}
+    } catch { }
 
     try {
       return await fsp.readFile(path.join(dir, `s${n}.vtt`), 'utf8');
@@ -362,13 +362,13 @@ async function extractSubs(file, cacheRoot) {
     const manifest = JSON.parse(await fsp.readFile(manifestPath, 'utf8'));
 
     // Mark as recently used so old entries can be cleaned up later.
-    fsp.utimes(dir, new Date(), new Date()).catch(() => {});
+    fsp.utimes(dir, new Date(), new Date()).catch(() => { });
 
     return {
       tracks: await readTracks(manifest.tracks),
       skipped: manifest.skipped
     };
-  } catch {}
+  } catch { }
 
   const info = await runFfmpeg(['-hide_banner', '-i', file], 30000);
 
@@ -398,7 +398,7 @@ async function extractSubs(file, cacheRoot) {
     try {
       await fsp.writeFile(file + '.gz', await gzip(await fsp.readFile(file)));
       await fsp.unlink(file);
-    } catch {}
+    } catch { }
   }
 
   const tracks = await readTracks(text);
@@ -445,7 +445,7 @@ async function pruneSubsCache(cacheRoot, maxAgeDays = 60) {
       if (st.isDirectory() && st.mtimeMs < limit) {
         await fsp.rm(dir, { recursive: true, force: true });
       }
-    } catch {}
+    } catch { }
   }
 }
 
@@ -903,6 +903,29 @@ app.whenReady().then(async () => {
       console.error('Embedded subtitle extraction failed:', error);
 
       return { tracks: [], skipped: 0 };
+    }
+  });
+
+  ipcMain.handle("external:open-app", async (event, app) => {
+    const apps = {
+      spotify: {
+        appUrl: "spotify:",
+        webUrl: "https://open.spotify.com"
+      }
+    };
+
+    const selectedApp = apps[app];
+
+    if (!selectedApp) {
+      throw new Error("Unsupported external application");
+    }
+
+    try {
+      // Try opening the installed desktop app
+      await shell.openExternal(selectedApp.appUrl);
+    } catch (error) {
+      // If the app isn't available, open the website
+      await shell.openExternal(selectedApp.webUrl);
     }
   });
 
