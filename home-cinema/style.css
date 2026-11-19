@@ -366,7 +366,7 @@ h2 {
 .card {
   flex: 0 0 270px;
   width: 270px;
-  min-width: 0;                 /* a long title can no longer widen the card */
+  min-width: 0;                 
   cursor: pointer;
   transition: transform .22s ease;
   position: relative;
