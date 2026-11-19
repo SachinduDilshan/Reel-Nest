@@ -892,11 +892,27 @@ function foldersModal() {
 const v = $('#v');
 const P = $('#player');
 
+// Optional external audio track (played in sync with the muted video).
+const A = new Audio();
+A.preload = 'auto';
+
 let cur = null;
 let queue = [];
-let ccIdx = -1;
 let hideT;
 let lastSave = 0;
+
+let subList = [];     // [{ label, el }] loaded subtitle tracks
+let ccIdx = -1;       // active subtitle index, -1 = off
+let subDelay = 0;     // seconds
+let ext = null;       // { name } while an external audio file is active
+let audioDelay = 0;   // seconds (positive = audio plays later)
+let note = '';
+let noteT;
+
+const menuOpen = () => !$('#tmenu').classList.contains('hidden');
+const closeMenu = () => $('#tmenu').classList.add('hidden');
+const fmtOff = d => (d >= 0 ? '+' : '') + d.toFixed(1) + 's';
+const updateBtn = () => $('#cc').classList.toggle('on', ccIdx >= 0 || !!ext);
 
 const nextEp = () => {
   const i = queue.indexOf(cur);
@@ -906,87 +922,308 @@ const nextEp = () => {
     : null;
 };
 
+/* ----- subtitles ----- */
+
+function toVtt(t) {
+  t = t.replace(/^\uFEFF/, '').replace(/\r/g, '');
+
+  if (!/^WEBVTT/.test(t)) {
+    t = 'WEBVTT\n\n' +
+      t.replace(/(\d\d:\d\d:\d\d),(\d{3})/g, '$1.$2');
+  }
+
+  return t;
+}
+
+function addSub(label, text) {
+  const tr = document.createElement('track');
+
+  tr.kind = 'subtitles';
+  tr.label = label;
+
+  tr.src = URL.createObjectURL(
+    new Blob([toVtt(text)], { type: 'text/vtt' })
+  );
+
+  // Cues only exist once the track has loaded, so re-apply the delay then.
+  tr.addEventListener('load', () => applyDelay(tr.track));
+
+  v.append(tr);
+  tr.track.mode = 'disabled';
+
+  subList.push({ label, el: tr });
+
+  return subList.length - 1;
+}
+
+function applyDelay(track) {
+  if (!track || !track.cues) return;
+
+  const d = subDelay - (track._shift || 0);
+
+  if (!d) return;
+
+  for (const c of track.cues) {
+    c.startTime += d;
+    c.endTime += d;
+  }
+
+  track._shift = subDelay;
+}
+
+function selectSub(idx) {
+  ccIdx = idx;
+
+  subList.forEach((s, i) => {
+    s.el.track.mode = i === idx ? 'showing' : 'disabled';
+  });
+
+  if (idx >= 0) applyDelay(subList[idx].el.track);
+
+  updateBtn();
+  if (menuOpen()) renderMenu();
+}
+
+function cycleCC() {
+  if (!subList.length) {
+    flash('No subtitles loaded. Open Subs & Audio to load a file.');
+    return;
+  }
+
+  selectSub(ccIdx + 1 >= subList.length ? -1 : ccIdx + 1);
+}
+
 async function loadSubs(it) {
+  for (const p of it.subs) {
+    const text = await api.readText(p);
+
+    if (cur !== it) return;      // user switched videos meanwhile
+    if (!text) continue;
+
+    addSub(p.split(/[\\/]/).pop(), text);
+  }
+
+  if (menuOpen()) renderMenu();
+}
+
+async function pickSub() {
+  const r = await api.pickSubtitle();
+
+  if (!r || !r.text) return;
+
+  selectSub(addSub(r.name, r.text));
+}
+
+/* ----- audio ----- */
+
+const syncA = () => {
+  A.currentTime = Math.max(0, v.currentTime - audioDelay);
+};
+
+function clearExt() {
+  if (!ext && !A.getAttribute('src')) return;
+
+  ext = null;
+  audioDelay = 0;
+
+  A.pause();
+  A.removeAttribute('src');
+  A.load();
+  A.muted = false;
+
+  v.muted = false;
+
+  updateBtn();
+}
+
+async function pickAudio() {
+  const r = await api.pickAudio();
+
+  if (!r) return;
+
+  ext = { name: r.name };
+
+  A.src = r.url;
+  A.volume = v.volume;
+  A.playbackRate = v.playbackRate;
+  A.muted = false;
+
+  A.onloadedmetadata = () => {
+    syncA();
+    if (!v.paused) A.play().catch(() => {});
+  };
+
+  v.muted = true;   // silence the original audio
+
+  updateBtn();
+  renderMenu();
+}
+
+A.onerror = () => {
+  if (!ext) return;
+
+  clearExt();
+
+  flash('That audio file can’t be played. Try MP3, AAC, M4A, OGG, FLAC or WAV.');
+};
+
+function setAudioTrack(i) {
+  clearExt();
+
+  [...(v.audioTracks || [])].forEach((t, k) => {
+    t.enabled = k === i;
+  });
+
+  renderMenu();
+}
+
+const setVol = x => {
+  v.volume = x;
+  A.volume = x;
+  $('#vol').value = x;
+};
+
+const toggleMute = () => {
+  if (ext) A.muted = !A.muted;
+  else v.muted = !v.muted;
+};
+
+/* ----- subtitles & audio menu ----- */
+
+function flash(text) {
+  note = text;
+
+  if (menuOpen()) renderMenu();
+  else {
+    $('#tmenu').classList.remove('hidden');
+    renderMenu();
+  }
+
+  clearTimeout(noteT);
+
+  noteT = setTimeout(() => {
+    note = '';
+    if (menuOpen()) renderMenu();
+  }, 5000);
+
+  showCtl();
+}
+
+function renderMenu() {
+  const m = $('#tmenu');
+  const at = v.audioTracks ? [...v.audioTracks] : [];
+
+  const row = (act, label, on) =>
+    `<button class="mi${on ? ' on' : ''}" data-a="${act}"><span>${esc(label)}</span></button>`;
+
+  const audioRows = at.length > 1
+    ? at.map((t, i) => {
+        const name =
+          (t.label || '') +
+          (t.language ? ` (${t.language})` : '') ||
+          `Track ${i + 1}`;
+
+        return row('a:' + i, name.trim() || `Track ${i + 1}`, !ext && t.enabled);
+      }).join('')
+    : row('a:orig', 'Original audio', !ext);
+
+  m.innerHTML = `
+    <div class="mcol">
+      <h4>Subtitles</h4>
+      ${row('s:-1', 'Off', ccIdx < 0)}
+      ${subList.map((s, i) => row('s:' + i, s.label, ccIdx === i)).join('')}
+      ${row('s:add', 'Load subtitle file…', false)}
+      <div class="sync">
+        Delay
+        <button data-a="sd:-0.5">−</button>
+        <b>${fmtOff(subDelay)}</b>
+        <button data-a="sd:0.5">+</button>
+      </div>
+    </div>
+    <div class="mcol">
+      <h4>Audio</h4>
+      ${audioRows}
+      ${ext ? row('a:ext', ext.name, true) : ''}
+      ${row('a:add', 'Load audio file…', false)}
+      ${ext
+        ? `<div class="sync">
+            Delay
+            <button data-a="ad:-0.5">−</button>
+            <b>${fmtOff(audioDelay)}</b>
+            <button data-a="ad:0.5">+</button>
+          </div>`
+        : ''}
+    </div>
+    ${note ? `<p class="tnote">${esc(note)}</p>` : ''}`;
+}
+
+$('#tmenu').onclick = e => {
+  const b = e.target.closest('[data-a]');
+
+  if (!b) return;
+
+  const [k, val] = b.dataset.a.split(':');
+
+  if (k === 's') {
+    if (val === 'add') pickSub();
+    else selectSub(+val);
+  }
+
+  else if (k === 'sd') {
+    subDelay = Math.round((subDelay + +val) * 10) / 10;
+    subList.forEach(s => applyDelay(s.el.track));
+    renderMenu();
+  }
+
+  else if (k === 'a') {
+    if (val === 'add') pickAudio();
+    else if (val === 'orig') { clearExt(); renderMenu(); }
+    else if (val !== 'ext') setAudioTrack(+val);
+  }
+
+  else if (k === 'ad') {
+    audioDelay = Math.round((audioDelay + +val) * 10) / 10;
+    syncA();
+    renderMenu();
+  }
+
+  showCtl();
+};
+
+$('#cc').onclick = () => {
+  if (menuOpen()) {
+    closeMenu();
+  } else {
+    renderMenu();
+    $('#tmenu').classList.remove('hidden');
+  }
+
+  showCtl();
+};
+
+function resetTracks() {
   $$('#v track').forEach(t => {
     URL.revokeObjectURL(t.src);
     t.remove();
   });
 
+  subList = [];
   ccIdx = -1;
+  subDelay = 0;
+  note = '';
 
-  $('#cc').textContent = 'CC';
-  $('#cc').classList.remove('on');
-
-  $('#cc').style.display =
-    it.subs.length ? '' : 'none';
-
-  for (const p of it.subs) {
-    let t = (
-      await api.readText(p)
-    )
-      .replace(/^\uFEFF/, '')
-      .replace(/\r/g, '');
-
-    if (!t) continue;
-
-    if (!/^WEBVTT/.test(t)) {
-      t = 'WEBVTT\n\n' +
-        t.replace(
-          /(\d\d:\d\d:\d\d),(\d{3})/g,
-          '$1.$2'
-        );
-    }
-
-    const tr = document.createElement('track');
-
-    tr.kind = 'subtitles';
-    tr.label = p.split(/[\\/]/).pop();
-
-    tr.src = URL.createObjectURL(
-      new Blob([t], {
-        type: 'text/vtt'
-      })
-    );
-
-    v.append(tr);
-  }
-
-  setTimeout(() => {
-    [...v.textTracks].forEach(t =>
-      t.mode = 'disabled'
-    );
-  }, 50);
+  clearExt();
+  closeMenu();
+  updateBtn();
 }
 
-function cycleCC() {
-  const ts = [...v.textTracks];
-
-  if (!ts.length) return;
-
-  ccIdx = ccIdx + 1 >= ts.length
-    ? -1
-    : ccIdx + 1;
-
-  ts.forEach((t, i) => {
-    t.mode = i === ccIdx
-      ? 'showing'
-      : 'disabled';
-  });
-
-  $('#cc').textContent =
-    ccIdx < 0
-      ? 'CC'
-      : 'CC ' + (ccIdx + 1);
-
-  $('#cc').classList.toggle(
-    'on',
-    ccIdx >= 0
-  );
-}
+/* ----- playback ----- */
 
 async function play(it, q = []) {
   cur = it;
   queue = q;
+
+  resetTracks();
 
   P.classList.remove('hidden');
   $('#perr').classList.add('hidden');
@@ -1037,6 +1274,8 @@ function closePlayer() {
   v.removeAttribute('src');
   v.load();
 
+  resetTracks();
+
   if (document.fullscreenElement) {
     document.exitFullscreen();
   }
@@ -1054,7 +1293,7 @@ function showCtl() {
   clearTimeout(hideT);
 
   hideT = setTimeout(() => {
-    if (!v.paused) {
+    if (!v.paused && !menuOpen()) {
       P.classList.remove('ui');
     }
   }, 3000);
@@ -1096,6 +1335,12 @@ v.ontimeupdate = () => {
   $('#time').textContent =
     `${fmtT(v.currentTime)} / ${fmtT(v.duration)}`;
 
+  // Keep external audio locked to the video.
+  if (ext && !A.paused &&
+      Math.abs(A.currentTime - (v.currentTime - audioDelay)) > 0.35) {
+    syncA();
+  }
+
   if (Date.now() - lastSave > 5000) {
     save();
   }
@@ -1105,6 +1350,19 @@ v.onplay = v.onpause = () => {
   $('#pp').textContent = v.paused ? '▶' : '⏸';
   showCtl();
 };
+
+// External audio follows the video.
+v.addEventListener('play', () => { if (ext) A.play().catch(() => {}); });
+v.addEventListener('pause', () => A.pause());
+v.addEventListener('waiting', () => A.pause());
+v.addEventListener('playing', () => {
+  if (ext) {
+    syncA();
+    A.play().catch(() => {});
+  }
+});
+v.addEventListener('seeked', () => { if (ext) syncA(); });
+v.addEventListener('ratechange', () => { A.playbackRate = v.playbackRate; });
 
 v.onended = () => {
   save();
@@ -1128,7 +1386,11 @@ v.onerror = () => {
     </p>`;
 };
 
-v.onclick = toggle;
+v.onclick = () => {
+  if (menuOpen()) closeMenu();
+  else toggle();
+};
+
 v.ondblclick = toggleFs;
 
 P.onmousemove = showCtl;
@@ -1139,16 +1401,16 @@ $('#f10').onclick = () => seekBy(10);
 
 $('#back').onclick = closePlayer;
 $('#nxt').onclick = goNext;
-$('#cc').onclick = cycleCC;
 $('#fs').onclick = toggleFs;
 
-$('#mute').onclick = () => {
-  v.muted = !v.muted;
-};
+$('#mute').onclick = toggleMute;
 
 $('#vol').oninput = e => {
-  v.volume = +e.target.value;
-  v.muted = false;
+  setVol(+e.target.value);
+
+  // The original audio stays muted while an external audio file is active.
+  if (ext) A.muted = false;
+  else v.muted = false;
 };
 
 $('#spd').onclick = () => {
@@ -1179,6 +1441,12 @@ document.addEventListener('keydown', e => {
 
   const k = e.key.toLowerCase();
 
+  if (k === 'escape' && menuOpen()) {
+    closeMenu();
+    e.preventDefault();
+    return;
+  }
+
   let used = true;
 
   if (k === ' ' || k === 'k') toggle();
@@ -1187,18 +1455,11 @@ document.addEventListener('keydown', e => {
   else if (k === 'l') seekBy(10);
   else if (k === 'j') seekBy(-10);
 
-  else if (k === 'arrowup') {
-    v.volume = Math.min(1, v.volume + 0.1);
-    $('#vol').value = v.volume;
-  }
-
-  else if (k === 'arrowdown') {
-    v.volume = Math.max(0, v.volume - 0.1);
-    $('#vol').value = v.volume;
-  }
+  else if (k === 'arrowup') setVol(Math.min(1, v.volume + 0.1));
+  else if (k === 'arrowdown') setVol(Math.max(0, v.volume - 0.1));
 
   else if (k === 'f') toggleFs();
-  else if (k === 'm') v.muted = !v.muted;
+  else if (k === 'm') toggleMute();
   else if (k === 'n') goNext();
   else if (k === 'c') cycleCC();
 

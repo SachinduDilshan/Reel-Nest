@@ -5,6 +5,9 @@ const {
 
 contextBridge.exposeInMainWorld('api', {
 
+  pickSubtitle: () => ipcRenderer.invoke('sub:pick'),
+  pickAudio: () => ipcRenderer.invoke('audio:pick'),
+
   // Get all library items.
   getLibrary: () =>
     ipcRenderer.invoke('lib:get'),
@@ -23,7 +26,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // Listen for automatic library updates.
   onLibraryUpdated: callback => {
-    if (typeof callback !== 'function') return () => {};
+    if (typeof callback !== 'function') return () => { };
 
     const listener = (_event, library) => {
       callback(library);

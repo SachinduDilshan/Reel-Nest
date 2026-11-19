@@ -8,6 +8,8 @@ const {
   shell
 } = require('electron');
 
+app.commandLine.appendSwitch('enable-blink-features', 'AudioVideoTracks');
+
 const path = require('path');
 const fsp = require('fs/promises');
 const { createReadStream } = require('fs');
@@ -41,6 +43,16 @@ const VIDEO = {
 
 // Supported subtitle formats.
 const SUB = new Set(['.srt', '.vtt']);
+
+// Audio formats the player can load from outside the library folders.
+const AUDIO = {
+  '.mp3': 'audio/mpeg', '.aac': 'audio/aac', '.m4a': 'audio/mp4',
+  '.ogg': 'audio/ogg', '.opus': 'audio/ogg', '.wav': 'audio/wav',
+  '.flac': 'audio/flac', '.mka': 'audio/webm', '.webm': 'audio/webm'
+};
+
+// Files the user picked manually through a dialog.
+const granted = new Set();
 
 const cfgFile = () =>
   path.join(app.getPath('userData'), 'library.json');
@@ -80,8 +92,8 @@ async function loadCfg() {
     return {
       folders: Array.isArray(config.folders)
         ? config.folders.filter(
-            folder => typeof folder === 'string'
-          )
+          folder => typeof folder === 'string'
+        )
         : []
     };
   } catch {
@@ -340,22 +352,19 @@ app.whenReady().then(async () => {
 
       const config = await loadCfg();
 
-      const allowed = config.folders.some(folder =>
-        isInsideFolder(filePath, folder)
-      );
+      const allowed =
+        granted.has(filePath) ||
+        config.folders.some(folder => isInsideFolder(filePath, folder));
 
       if (!allowed) {
-        return new Response('Forbidden', {
-          status: 403
-        });
+        return new Response('Forbidden', { status: 403 });
       }
 
       const ext = path.extname(filePath).toLowerCase();
+      const mime = granted.has(filePath) ? AUDIO[ext] : VIDEO[ext];
 
-      if (!VIDEO[ext]) {
-        return new Response('Unsupported media type', {
-          status: 415
-        });
+      if (!mime) {
+        return new Response('Unsupported media type', { status: 415 });
       }
 
       const stats = await fsp.stat(filePath);
@@ -369,7 +378,7 @@ app.whenReady().then(async () => {
       const size = stats.size;
 
       const headers = {
-        'Content-Type': VIDEO[ext],
+        'Content-Type': mime,
         'Accept-Ranges': 'bytes',
         'Access-Control-Allow-Origin': '*'
       };
@@ -544,6 +553,45 @@ app.whenReady().then(async () => {
     } catch {
       return '';
     }
+  });
+
+  // Pick a subtitle file from anywhere on the laptop.
+  ipcMain.handle('sub:pick', async () => {
+    const r = await dialog.showOpenDialog(mainWindow, {
+      title: 'Choose a subtitle file',
+      properties: ['openFile'],
+      filters: [{ name: 'Subtitles', extensions: ['srt', 'vtt'] }]
+    });
+
+    if (r.canceled || !r.filePaths[0]) return null;
+
+    try {
+      return {
+        name: path.basename(r.filePaths[0]),
+        text: await fsp.readFile(r.filePaths[0], 'utf8')
+      };
+    } catch {
+      return null;
+    }
+  });
+
+  // Pick an external audio file.
+  ipcMain.handle('audio:pick', async () => {
+    const r = await dialog.showOpenDialog(mainWindow, {
+      title: 'Choose an audio file',
+      properties: ['openFile'],
+      filters: [{ name: 'Audio', extensions: ['mp3', 'aac', 'm4a', 'ogg', 'opus', 'wav', 'flac', 'mka'] }]
+    });
+
+    if (r.canceled || !r.filePaths[0]) return null;
+
+    const p = path.resolve(r.filePaths[0]);
+    granted.add(p);
+
+    return {
+      name: path.basename(p),
+      url: 'media://local/' + encodeURIComponent(p)
+    };
   });
 
   // Start watching previously selected folders.
