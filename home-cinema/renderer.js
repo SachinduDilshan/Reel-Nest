@@ -912,35 +912,87 @@ let subsBusy = false;    // reading subtitles embedded in the video file
 let subsInfo = '';       // short status text shown in the menu
 let subTouched = false;  // user picked a subtitle manually (disables auto-select)
 
-// Subtitle text size in percent (remembered between sessions).
-let subSize = (() => {
-  const n = parseInt(localStorage.getItem('subSize'), 10);
+// Subtitle appearance (remembered between sessions).
+const DEFAULT_STYLE = { size: 100, color: 'white', bg: 'box' };
 
-  return n >= 40 && n <= 250 ? n : 100;
+const COLORS = {
+  white: '#ffffff',
+  yellow: '#ffe14d',
+  cyan: '#7df3ff',
+  green: '#8dff8d'
+};
+
+const subStyle = (() => {
+  try {
+    const s = JSON.parse(localStorage.getItem('subStyle') || '{}');
+    const legacy = parseInt(localStorage.getItem('subSize'), 10);
+    const size = s.size || legacy;
+
+    return {
+      size: size >= 40 && size <= 250 ? size : DEFAULT_STYLE.size,
+      color: COLORS[s.color] ? s.color : DEFAULT_STYLE.color,
+      bg: ['box', 'shadow', 'none'].includes(s.bg) ? s.bg : DEFAULT_STYLE.bg
+    };
+  } catch {
+    return { ...DEFAULT_STYLE };
+  }
 })();
 
 const cueStyle = document.createElement('style');
 document.head.append(cueStyle);
 
-function applySubSize() {
+function cueLook() {
+  return {
+    color: COLORS[subStyle.color],
+    background: subStyle.bg === 'box' ? 'rgba(0,0,0,.72)' : 'transparent',
+    shadow: subStyle.bg === 'shadow'
+      ? '0 0 3px #000, 0 0 6px #000, 1px 1px 2px #000, -1px -1px 2px #000'
+      : 'none'
+  };
+}
+
+function applySubStyle() {
+  const c = cueLook();
+
   // vh keeps the text proportional in a window and in fullscreen.
   cueStyle.textContent =
-    `#v::cue { font-size: ${(2.6 * subSize / 100).toFixed(2)}vh; background: #000a; }`;
+    `#v::cue { font-size: ${(2.6 * subStyle.size / 100).toFixed(2)}vh; ` +
+    `color: ${c.color}; background: ${c.background}; text-shadow: ${c.shadow}; }`;
 
   try {
-    localStorage.setItem('subSize', String(subSize));
+    localStorage.setItem('subStyle', JSON.stringify(subStyle));
   } catch {}
 }
 
-function changeSubSize(delta) {
-  subSize = Math.max(40, Math.min(250, subSize + delta));
+const previewCss = () => {
+  const c = cueLook();
 
-  applySubSize();
+  return `font-size:${(18 * subStyle.size / 100).toFixed(1)}px;` +
+    `color:${c.color};background:${c.background};text-shadow:${c.shadow}`;
+};
 
-  if (menuOpen()) renderMenu();
+// Updates the live preview and size controls without rebuilding the menu.
+function refreshStyleUi() {
+  const p = $('#subprev');
+  if (p) p.style.cssText = previewCss();
+
+  const r = $('#szr');
+  if (r) r.value = subStyle.size;
+
+  const l = $('#szv');
+  if (l) l.textContent = subStyle.size + '%';
 }
 
-applySubSize();
+function setSubSize(n) {
+  subStyle.size = Math.max(40, Math.min(250, Math.round(n / 5) * 5));
+
+  applySubStyle();
+  refreshStyleUi();
+}
+
+const changeSubSize = d => setSubSize(subStyle.size + d);
+
+applySubStyle();
 
 const menuOpen = () => !$('#tmenu').classList.contains('hidden');
 const closeMenu = () => $('#tmenu').classList.add('hidden');
@@ -971,7 +1023,10 @@ function toVtt(t) {
   return t;
 }
 
-function addSub(label, text) {
+function addSub(rawLabel, text) {
+  const embedded = / \(embedded\)$/.test(rawLabel);
+  const label = rawLabel.replace(/ \(embedded\)$/, '');
+
   const tr = document.createElement('track');
 
   tr.kind = 'subtitles';
@@ -987,7 +1042,7 @@ function addSub(label, text) {
   v.append(tr);
   tr.track.mode = 'disabled';
 
-  subList.push({ label, el: tr });
+  subList.push({ label, src: embedded ? 'Embedded' : 'File', el: tr });
 
   return subList.length - 1;
 }
@@ -1008,7 +1063,17 @@ function applyDelay(track) {
 }
 
 function selectSub(idx, auto = false) {
-  if (!auto) subTouched = true;
+  if (!auto) {
+    subTouched = true;
+
+    // Remember the language so the next video starts with it.
+    try {
+      localStorage.setItem(
+        'subPref',
+        idx < 0 ? 'off' : baseLang(subList[idx].label)
+      );
+    } catch {}
+  }
 
   ccIdx = idx;
 
@@ -1024,7 +1089,7 @@ function selectSub(idx, auto = false) {
 
 function cycleCC() {
   if (!subList.length) {
-    flash('No subtitles loaded. Open Subs & Audio to load a file.');
+    flash('No subtitles loaded. Use “Load subtitle file…” below.', 'subs');
     return;
   }
 
@@ -1076,10 +1141,29 @@ async function loadEmbedded(it) {
     subsInfo = 'No subtitles found in this file.';
   }
 
-  // Turn on the default track automatically (like most players do).
+  // Pick a track automatically: the language used last time, otherwise the
+  // file's default track (like most players do).
   if (!subTouched && ccIdx < 0 && r.tracks.length) {
-    const d = r.tracks.findIndex(t => t.def);
-    const pick = d >= 0 ? d : (r.tracks.length === 1 ? 0 : -1);
+    const pref = localStorage.getItem('subPref');
+    let pick = -1;
+
+    if (pref !== 'off') {
+      if (pref) {
+        const same = r.tracks
+          .map((t, i) => ({ t, i }))
+          .filter(({ t }) => baseLang(t.label) === pref);
+
+        const best =
+          same.find(({ t }) => !/sign|forced|song/i.test(t.label)) || same[0];
+
+        if (best) pick = best.i;
+      }
+
+      if (pick < 0) {
+        const d = r.tracks.findIndex(t => t.def);
+        pick = d >= 0 ? d : (r.tracks.length === 1 ? 0 : -1);
+      }
+    }
 
     if (pick >= 0) selectSub(first + pick, true);
   }
@@ -1146,7 +1230,7 @@ A.onerror = () => {
 
   clearExt();
 
-  flash('That audio file can’t be played. Try MP3, AAC, M4A, OGG, FLAC or WAV.');
+  flash('That audio file can’t be played. Try MP3, AAC, M4A, OGG, FLAC or WAV.', 'audio');
 };
 
 function setAudioTrack(i) {
@@ -1170,16 +1254,25 @@ const toggleMute = () => {
   else v.muted = !v.muted;
 };
 
-/* ----- subtitles & audio menu ----- */
+/* ----- subtitles & audio panel ----- */
 
-function flash(text) {
+let menuTab = 'subs';     // 'subs' | 'audio' | 'style'
+let subQuery = '';
+
+function openMenu(tab) {
+  if (tab) menuTab = tab;
+
+  subQuery = '';
+
+  $('#tmenu').classList.remove('hidden');
+  renderMenu({ reveal: true });
+}
+
+function flash(text, tab) {
   note = text;
 
-  if (menuOpen()) renderMenu();
-  else {
-    $('#tmenu').classList.remove('hidden');
-    renderMenu();
-  }
+  if (!menuOpen()) openMenu(tab);
+  else renderMenu();
 
   clearTimeout(noteT);
 
@@ -1191,60 +1284,176 @@ function flash(text) {
   showCtl();
 }
 
-function renderMenu() {
-  const m = $('#tmenu');
+const baseLang = label =>
+  label
+    .replace(/\s*\((embedded|forced)\)/g, '')
+    .split(' – ')[0]
+    .trim()
+    .toLowerCase();
+
+const mrow = (act, label, on, tag) =>
+  `<button class="mi${on ? ' on' : ''}" data-a="${act}" role="menuitemradio" aria-checked="${on}">
+    <i class="dot"></i>
+    <span class="mn">${esc(label)}</span>
+    ${tag ? `<em class="tag">${tag}</em>` : ''}
+  </button>`;
+
+const stepper = (kind, val) => `
+  <div class="step">
+    <button data-a="${kind}:-0.5">−0.5</button>
+    <button data-a="${kind}:-0.1">−0.1</button>
+    <b>${fmtOff(val)}</b>
+    <button data-a="${kind}:0.1">+0.1</button>
+    <button data-a="${kind}:0.5">+0.5</button>
+    <button class="rst" data-a="${kind}:reset">Reset</button>
+  </div>`;
+
+function subsListHtml() {
+  const q = subQuery.trim().toLowerCase();
+
+  const rows = subList
+    .map((s, i) => ({ s, i }))
+    .filter(({ s }) => !q || s.label.toLowerCase().includes(q))
+    .sort((a, b) =>
+      (a.s.src === b.s.src ? 0 : a.s.src === 'File' ? -1 : 1) ||
+      a.s.label.localeCompare(b.s.label)
+    )
+    .map(({ s, i }) => mrow('s:' + i, s.label, ccIdx === i, s.src))
+    .join('');
+
+  if (rows) return rows;
+
+  return `<p class="mempty">${
+    subsBusy
+      ? 'Reading subtitles from the video…'
+      : q
+        ? `No language matches “${esc(subQuery)}”.`
+        : esc(subsInfo || 'No subtitles found for this video.')
+  }</p>`;
+}
+
+function subsBody() {
+  const status = subList.length
+    ? (subsBusy ? 'Reading more subtitles from the video…' : subsInfo)
+    : '';
+
+  return `
+    ${mrow('s:-1', 'Off', ccIdx < 0, '')}
+    ${subList.length > 6
+      ? `<div class="msearch"><input id="subq" type="search" placeholder="Search language…" value="${esc(subQuery)}" autocomplete="off" spellcheck="false"></div>`
+      : ''}
+    <div class="mlist">${subsListHtml()}</div>
+    <div class="mfoot">
+      ${status ? `<p class="mstat">${esc(status)}</p>` : ''}
+      <button class="mbtn" data-a="s:add">Load subtitle file…</button>
+    </div>`;
+}
+
+function audioBody() {
   const at = v.audioTracks ? [...v.audioTracks] : [];
 
-  const row = (act, label, on) =>
-    `<button class="mi${on ? ' on' : ''}" data-a="${act}"><span>${esc(label)}</span></button>`;
-
-  const audioRows = at.length > 1
+  const rows = at.length > 1
     ? at.map((t, i) => {
         const name =
-          (t.label || '') +
-          (t.language ? ` (${t.language})` : '') ||
+          ((t.label || '') + (t.language ? ` (${t.language})` : '')).trim() ||
           `Track ${i + 1}`;
 
-        return row('a:' + i, name.trim() || `Track ${i + 1}`, !ext && t.enabled);
+        return mrow('a:' + i, name, !ext && t.enabled, '');
       }).join('')
-    : row('a:orig', 'Original audio', !ext);
+    : mrow('a:orig', 'Original audio', !ext, '');
+
+  return `
+    <div class="mlist">
+      ${rows}
+      ${ext ? mrow('a:ext', ext.name, true, 'File') : ''}
+    </div>
+    ${ext
+      ? `<div class="field"><label>Audio delay</label>${stepper('ad', audioDelay)}</div>`
+      : ''}
+    <div class="mfoot">
+      <button class="mbtn" data-a="a:add">Load audio file…</button>
+    </div>`;
+}
+
+function styleBody() {
+  const swatches = Object.entries(COLORS).map(([k, hex]) =>
+    `<button class="cswatch${subStyle.color === k ? ' on' : ''}" data-a="col:${k}" style="--c:${hex}" aria-label="${k}" title="${k[0].toUpperCase() + k.slice(1)}"></button>`
+  ).join('');
+
+  const seg = [['box', 'Box'], ['shadow', 'Shadow'], ['none', 'None']].map(([k, l]) =>
+    `<button class="${subStyle.bg === k ? 'on' : ''}" data-a="bg:${k}">${l}</button>`
+  ).join('');
+
+  return `
+    <div class="mscroll">
+      <div class="prev"><span id="subprev" style="${previewCss()}">This is how your subtitles look</span></div>
+
+      <div class="field">
+        <label>Size</label>
+        <div class="sizerow">
+          <button data-a="sz:-10" aria-label="Smaller">−</button>
+          <input id="szr" type="range" min="40" max="250" step="5" value="${subStyle.size}">
+          <button data-a="sz:10" aria-label="Larger">+</button>
+          <b id="szv">${subStyle.size}%</b>
+        </div>
+      </div>
+
+      <div class="field"><label>Colour</label><div class="swatches">${swatches}</div></div>
+      <div class="field"><label>Background</label><div class="seg">${seg}</div></div>
+      <div class="field"><label>Subtitle delay</label>${stepper('sd', subDelay)}</div>
+    </div>
+    <div class="mfoot">
+      <p class="mstat">Tip: press [ or ] in the player to change the size.</p>
+      <button class="mbtn ghost" data-a="st:reset">Reset appearance</button>
+    </div>`;
+}
+
+function renderMenu(opts = {}) {
+  const m = $('#tmenu');
+  const old = m.querySelector('.mlist');
+  const keep = old ? old.scrollTop : 0;
+
+  const tab = (id, label, badge) =>
+    `<button class="mtab${menuTab === id ? ' on' : ''}" role="tab" aria-selected="${menuTab === id}" data-a="tab:${id}">${label}${badge ? `<small>${badge}</small>` : ''}</button>`;
+
+  const body =
+    menuTab === 'audio' ? audioBody()
+    : menuTab === 'style' ? styleBody()
+    : subsBody();
 
   m.innerHTML = `
-    <div class="mcol">
-      <h4>Subtitles</h4>
-      ${row('s:-1', 'Off', ccIdx < 0)}
-      ${subList.map((s, i) => row('s:' + i, s.label, ccIdx === i)).join('')}
-      ${row('s:add', 'Load subtitle file…', false)}
-      ${subsBusy || subsInfo ? `<p class="tstat">${esc(subsBusy ? 'Reading subtitles from the video…' : subsInfo)}</p>` : ''}
-      <div class="sync">
-        Delay
-        <button data-a="sd:-0.5">−</button>
-        <b>${fmtOff(subDelay)}</b>
-        <button data-a="sd:0.5">+</button>
+    <div class="mhead">
+      <div class="mtabs" role="tablist">
+        ${tab('subs', 'Subtitles', subList.length || '')}
+        ${tab('audio', 'Audio', '')}
+        ${tab('style', 'Style', '')}
       </div>
-      <div class="sync">
-        Size
-        <button data-a="sz:-10">−</button>
-        <b>${subSize}%</b>
-        <button data-a="sz:10">+</button>
-      </div>
+      <button class="mclose" data-a="close" aria-label="Close">✕</button>
     </div>
-    <div class="mcol">
-      <h4>Audio</h4>
-      ${audioRows}
-      ${ext ? row('a:ext', ext.name, true) : ''}
-      ${row('a:add', 'Load audio file…', false)}
-      ${ext
-        ? `<div class="sync">
-            Delay
-            <button data-a="ad:-0.5">−</button>
-            <b>${fmtOff(audioDelay)}</b>
-            <button data-a="ad:0.5">+</button>
-          </div>`
-        : ''}
-    </div>
+    <div class="mbody">${body}</div>
     ${note ? `<p class="tnote">${esc(note)}</p>` : ''}`;
+
+  const list = m.querySelector('.mlist');
+
+  if (list) {
+    const on = list.querySelector('.on');
+
+    if (opts.reveal && on) {
+      list.scrollTop = on.offsetTop - list.clientHeight / 2 + on.offsetHeight / 2;
+    } else {
+      list.scrollTop = keep;
+    }
+  }
 }
+
+$('#tmenu').addEventListener('input', e => {
+  if (e.target.id === 'subq') {
+    subQuery = e.target.value;
+    $('#tmenu .mlist').innerHTML = subsListHtml();
+  } else if (e.target.id === 'szr') {
+    setSubSize(+e.target.value);
+  }
+});
 
 $('#tmenu').onclick = e => {
   const b = e.target.closest('[data-a]');
@@ -1253,17 +1462,47 @@ $('#tmenu').onclick = e => {
 
   const [k, val] = b.dataset.a.split(':');
 
-  if (k === 's') {
+  const step = (current, d) =>
+    d === 'reset' ? 0 : Math.round((current + +d) * 10) / 10;
+
+  if (k === 'tab') {
+    menuTab = val;
+    renderMenu({ reveal: true });
+  }
+
+  else if (k === 'close') {
+    closeMenu();
+  }
+
+  else if (k === 's') {
     if (val === 'add') pickSub();
     else selectSub(+val);
   }
 
   else if (k === 'sz') {
-    changeSubSize(+val);
+    setSubSize(subStyle.size + +val);
+  }
+
+  else if (k === 'col') {
+    subStyle.color = val;
+    applySubStyle();
+    renderMenu();
+  }
+
+  else if (k === 'bg') {
+    subStyle.bg = val;
+    applySubStyle();
+    renderMenu();
+  }
+
+  else if (k === 'st') {
+    Object.assign(subStyle, DEFAULT_STYLE);
+    applySubStyle();
+    renderMenu();
   }
 
   else if (k === 'sd') {
-    subDelay = Math.round((subDelay + +val) * 10) / 10;
+    subDelay = step(subDelay, val);
     subList.forEach(s => applyDelay(s.el.track));
     renderMenu();
   }
@@ -1275,7 +1514,7 @@ $('#tmenu').onclick = e => {
   }
 
   else if (k === 'ad') {
-    audioDelay = Math.round((audioDelay + +val) * 10) / 10;
+    audioDelay = step(audioDelay, val);
     syncA();
     renderMenu();
   }
@@ -1284,12 +1523,8 @@ $('#tmenu').onclick = e => {
 };
 
 $('#cc').onclick = () => {
-  if (menuOpen()) {
-    closeMenu();
-  } else {
-    renderMenu();
-    $('#tmenu').classList.remove('hidden');
-  }
+  if (menuOpen()) closeMenu();
+  else openMenu();
 
   showCtl();
 };
@@ -1529,7 +1764,18 @@ $('#seek').onclick = e => {
 };
 
 document.addEventListener('keydown', e => {
-  if (e.target.id === 'q') return;
+  // Typing in a search box, or moving a slider, must not trigger shortcuts.
+  if (e.target.matches && e.target.matches('#q, #subq')) {
+    if (e.key === 'Escape' && e.target.id === 'subq') {
+      e.target.blur();
+      closeMenu();
+    }
+
+    return;
+  }
+
+  if (e.target.type === 'range' && e.key.startsWith('Arrow')) return;
+
 
   if (P.classList.contains('hidden')) {
     if (e.key === 'Escape') closeModal();
