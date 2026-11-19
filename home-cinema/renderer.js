@@ -408,7 +408,9 @@ const sortPref = (() => {
 })();
 
 const saveSort = () => {
-  try { localStorage.setItem('sort', JSON.stringify(sortPref)); } catch {}
+  try {
+    localStorage.setItem('sort', JSON.stringify(sortPref));
+  } catch {}
 };
 
 const SORTS = {
@@ -428,8 +430,10 @@ const FILTERS = {
 
 const dirLabel = () => {
   const asc = sortPref.dir === 'asc';
+
   if (sortPref.by === 'name') return asc ? 'A → Z' : 'Z → A';
   if (sortPref.by === 'size') return asc ? 'Smallest first' : 'Largest first';
+
   return asc ? 'Oldest first' : 'Newest first';
 };
 
@@ -440,37 +444,53 @@ function sortValue(x, by) {
   if (by === 'added') return x.added;
   if (by === 'year') return x.kind === 'show' ? null : (+x.year || null);
   if (by === 'size') return epsOf(x).reduce((a, e) => a + e.size, 0);
+
   if (by === 'watched') {
-    const t = Math.max(0, ...epsOf(x).map(e => (prog[e.id] && prog[e.id].u) || 0));
+    const t = Math.max(
+      0,
+      ...epsOf(x).map(e => (prog[e.id] && prog[e.id].u) || 0)
+    );
+
     return t || null;
   }
 }
 
 function status(x) {
   const p = epsOf(x).map(pct);
+
   if (p.every(n => n > 95)) return 'watched';
   if (p.every(n => n <= 1)) return 'unwatched';
+
   return 'progress';
 }
 
 function applySort(list) {
   const { by, dir, show } = sortPref;
   const m = dir === 'asc' ? 1 : -1;
+
   const nameOf = x => (x.kind === 'show' ? x.name : x.title);
+
   const cmpName = (a, b) =>
-    nameOf(a).localeCompare(nameOf(b), undefined, { numeric: true, sensitivity: 'base' });
+    nameOf(a).localeCompare(nameOf(b), undefined, {
+      numeric: true,
+      sensitivity: 'base'
+    });
 
   return list
     .filter(x => show === 'all' || status(x) === show)
     .sort((a, b) => {
-      const A = sortValue(a, by), B = sortValue(b, by);
+      const A = sortValue(a, by);
+      const B = sortValue(b, by);
+
       // Items with no value (e.g. never watched) always go last.
       if (A == null && B == null) return cmpName(a, b);
       if (A == null) return 1;
       if (B == null) return -1;
+
       const r = typeof A === 'string'
         ? A.localeCompare(B, undefined, { numeric: true, sensitivity: 'base' })
         : A - B;
+
       return r ? r * m : cmpName(a, b);
     });
 }
@@ -478,7 +498,9 @@ function applySort(list) {
 function grid(title, list) {
   const opts = (o, cur) =>
     Object.entries(o)
-      .map(([k, l]) => `<option value="${k}"${k === cur ? ' selected' : ''}>${l}</option>`)
+      .map(([k, l]) =>
+        `<option value="${k}"${k === cur ? ' selected' : ''}>${l}</option>`
+      )
       .join('');
 
   const g = el(
@@ -504,6 +526,7 @@ function grid(title, list) {
 
   const fill = () => {
     const out = applySort(list);
+
     box.replaceChildren(...out.map(x => card(x)));
     none.classList.toggle('hidden', out.length > 0);
     sd.textContent = dirLabel();
@@ -511,25 +534,30 @@ function grid(title, list) {
 
   sb.onchange = () => {
     sortPref.by = sb.value;
+
     // Sensible default order: names A→Z, everything else newest/largest first.
     sortPref.dir = sb.value === 'name' ? 'asc' : 'desc';
+
     saveSort();
     fill();
   };
 
   sd.onclick = () => {
     sortPref.dir = sortPref.dir === 'asc' ? 'desc' : 'asc';
+
     saveSort();
     fill();
   };
 
   sf.onchange = () => {
     sortPref.show = sf.value;
+
     saveSort();
     fill();
   };
 
   fill();
+
   return g;
 }
 
