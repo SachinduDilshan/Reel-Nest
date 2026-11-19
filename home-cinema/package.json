@@ -14,7 +14,18 @@
   "build": {
     "appId": "local.homecinema",
     "productName": "Home Cinema",
-    "files": ["main.js", "preload.js", "index.html", "style.css", "renderer.js"],
-    "win": { "target": "nsis" }
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "style.css",
+      "renderer.js"
+    ],
+    "win": {
+      "target": "nsis"
+    }
+  },
+  "dependencies": {
+    "chokidar": "^3.6.0"
   }
 }
