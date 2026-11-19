@@ -299,9 +299,11 @@ h2 {
 
 .scr {
   display: flex;
+  align-items: flex-start;      /* cards keep their own height */
   gap: 13px;
   overflow-x: auto;
-  padding: 18px 0 34px;
+  padding: 18px 16px 34px;      /* room for the hover zoom, so edges aren't clipped */
+  margin: 0 -16px;
   scrollbar-width: none;
   scroll-behavior: smooth;
 }
@@ -363,13 +365,22 @@ h2 {
 
 .card {
   flex: 0 0 270px;
+  width: 270px;
+  min-width: 0;                 /* a long title can no longer widen the card */
   cursor: pointer;
   transition: transform .22s ease;
   position: relative;
 }
 
+.card .cs {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .grid .card {
   flex: auto;
+  width: auto;
 }
 
 .card:hover {
