@@ -56,7 +56,7 @@ const prog = JSON.parse(
 const saveProg = () => {
   try {
     localStorage.setItem('prog', JSON.stringify(prog));
-  } catch {}
+  } catch { }
 };
 
 const pct = it => {
@@ -167,8 +167,12 @@ function build(list) {
 
 /* ---------- thumbnails ---------- */
 
+// Frames are captured from the videos themselves and cached offline in
+// IndexedDB as small JPEG files (blobs). Only the thumbnails near the screen
+// are kept in memory; the rest are released and reloaded from disk on demand.
+
 const idb = new Promise(res => {
-  const r = indexedDB.open('hc', 1);
+  const r = indexedDB.open('hc2', 1);
 
   r.onupgradeneeded = () =>
     r.result.createObjectStore('t');
@@ -176,6 +180,14 @@ const idb = new Promise(res => {
   r.onsuccess = () => res(r.result);
   r.onerror = () => res(null);
 });
+
+// One-time removal of the old (much larger) base64 thumbnail cache.
+try {
+  if (!localStorage.getItem('hcCleaned')) {
+    indexedDB.deleteDatabase('hc');
+    localStorage.setItem('hcCleaned', '1');
+  }
+} catch { }
 
 const idbGet = async k => {
   const d = await idb;
@@ -200,11 +212,35 @@ const idbSet = async (k, v) => {
   }
 };
 
+// Deletes cached thumbnails of videos that are no longer in the library.
+async function pruneThumbs(validIds) {
+  const d = await idb;
+
+  if (!d) return;
+
+  const req = d.transaction('t', 'readwrite')
+    .objectStore('t')
+    .openCursor();
+
+  req.onsuccess = () => {
+    const c = req.result;
+
+    if (!c) return;
+
+    const key = String(c.key);
+    const id = key.slice(key.indexOf(':') + 1);
+
+    if (!validIds.has(id)) c.delete();
+
+    c.continue();
+  };
+}
+
 const grab = (it, w) => new Promise(res => {
   const v = document.createElement('video');
 
   v.muted = true;
-  v.preload = 'auto';
+  v.preload = 'metadata';
   v.crossOrigin = 'anonymous';
 
   const done = r => {
@@ -254,10 +290,12 @@ const grab = (it, w) => new Promise(res => {
         w, h
       );
 
-      done({
-        img: c.toDataURL('image/jpeg', 0.78),
-        d: v.duration
-      });
+      const d = v.duration;
+
+      c.toBlob(blob => {
+        c.width = c.height = 0;          // free the canvas memory right away
+        done(blob ? { blob, d } : null);
+      }, 'image/jpeg', 0.72);
 
     } catch {
       done(null);
@@ -269,16 +307,21 @@ const grab = (it, w) => new Promise(res => {
 
 let chain = Promise.resolve();
 
-const cache = new Map();
+const pending = new Map();     // thumbnails being prepared right now
+const failed = new Set();      // files that can't give a frame (don't retry)
 
-function thumb(it, w = 480) {
+// Resolves to the JPEG blob of a thumbnail (creating and caching it if needed).
+function thumbBlob(it, w = 480) {
   const k = w + ':' + it.id;
 
-  if (!cache.has(k)) {
-    cache.set(k, (async () => {
+  if (failed.has(k)) return Promise.resolve(null);
+
+  if (!pending.has(k)) {
+    pending.set(k, (async () => {
       let r = await idbGet(k);
 
-      if (!r) {
+      if (!r || !r.blob) {
+        // Capture one at a time so the app never decodes several videos at once.
         chain = chain
           .then(() => grab(it, w))
           .catch(() => null);
@@ -286,40 +329,91 @@ function thumb(it, w = 480) {
         r = await chain;
 
         if (r) idbSet(k, r);
+        else failed.add(k);
       }
 
-      if (r) it.dur = r.d;
+      if (r && r.d) it.dur = r.d;
 
-      return r;
-    })());
+      return r ? r.blob : null;
+    })().finally(() => pending.delete(k)));
   }
 
-  return cache.get(k);
+  return pending.get(k);
 }
 
+const imgUrls = new WeakMap();
+
+function setImg(img, blob) {
+  clearImg(img);
+
+  const url = URL.createObjectURL(blob);
+
+  imgUrls.set(img, url);
+  img.src = url;
+  img.classList.add('in');
+}
+
+// Releases the picture (and its decoded pixels) held by an <img>.
+function clearImg(img) {
+  const url = imgUrls.get(img);
+
+  if (!url) return;
+
+  img.classList.remove('in');
+  img.removeAttribute('src');
+
+  URL.revokeObjectURL(url);
+  imgUrls.delete(img);
+}
+
+// Hero / detail pictures: loaded once when shown.
+function loadImg(img, it, w) {
+  thumbBlob(it, w).then(blob => {
+    if (blob && img.isConnected) setImg(img, blob);
+  });
+}
+
+// Cards: load when near the screen, release when scrolled far away.
 const io = new IntersectionObserver(es => {
   es.forEach(e => {
-    if (!e.isIntersecting) return;
+    const img = e.target;
+    const d = img._d;
 
-    io.unobserve(e.target);
+    if (!d) return;
 
-    const { it, w } = e.target._d;
+    d.vis = e.isIntersecting;
 
-    thumb(it, w).then(r => {
-      if (r) {
-        e.target.src = r.img;
-        e.target.classList.add('in');
-      }
+    if (!d.vis) {
+      clearImg(img);
+      return;
+    }
+
+    if (imgUrls.has(img) || d.busy) return;
+
+    d.busy = true;
+
+    thumbBlob(d.it, d.w).then(blob => {
+      d.busy = false;
+
+      if (blob && d.vis && img.isConnected) setImg(img, blob);
     });
   });
 }, {
-  rootMargin: '300px'
+  rootMargin: '400px'
 });
 
 const lazy = (img, it, w = 480) => {
-  img._d = { it, w };
+  img._d = { it, w, vis: false, busy: false };
   io.observe(img);
 };
+
+// Call before removing a part of the page so its pictures are freed.
+function releaseImgs(root) {
+  root.querySelectorAll('img').forEach(img => {
+    io.unobserve(img);
+    clearImg(img);
+  });
+}
 
 /* ---------- UI building blocks ---------- */
 
@@ -350,8 +444,8 @@ function card(x) {
       <div class="fb">${esc(title)}</div>
       <img alt="">
       ${x.kind !== 'show' && pct(x) > 1
-        ? `<i class="pb"><u style="width:${pct(x)}%"></u></i>`
-        : ''}
+      ? `<i class="pb"><u style="width:${pct(x)}%"></u></i>`
+      : ''}
     </div>
     <div class="ct">${esc(title)}</div>
     <div class="cs">${esc(sub)}</div>`
@@ -410,7 +504,7 @@ const sortPref = (() => {
 const saveSort = () => {
   try {
     localStorage.setItem('sort', JSON.stringify(sortPref));
-  } catch {}
+  } catch { }
 };
 
 const SORTS = {
@@ -588,13 +682,7 @@ function heroEl(x) {
     </div>`
   );
 
-  thumb(it, 1280).then(r => {
-    if (r) {
-      const i = h.querySelector('img');
-      i.src = r.img;
-      i.classList.add('in');
-    }
-  });
+  loadImg(h.querySelector('img'), it, 960);
 
   const [p, i] = h.querySelectorAll('button');
 
@@ -633,6 +721,8 @@ function playTarget(x) {
 function render() {
   const m = $('#main');
 
+  releaseImgs(m);
+
   m.innerHTML = '';
 
   if (!items.length) {
@@ -667,11 +757,11 @@ function render() {
       res.length
         ? grid(`Results for “${query}”`, res)
         : el(
-            'div',
-            'empty',
-            `<h1>No matches</h1>
+          'div',
+          'empty',
+          `<h1>No matches</h1>
             <p>Nothing in your library matches “${esc(query)}”.</p>`
-          )
+        )
     );
 
     return;
@@ -682,10 +772,10 @@ function render() {
       movies.length
         ? grid('Movies', movies)
         : el(
-            'div',
-            'empty',
-            '<h1>No movies yet</h1><p>Files without an S01E01 style number are treated as movies.</p>'
-          )
+          'div',
+          'empty',
+          '<h1>No movies yet</h1><p>Files without an S01E01 style number are treated as movies.</p>'
+        )
     );
   }
 
@@ -694,10 +784,10 @@ function render() {
       shows.length
         ? grid('TV Shows', shows)
         : el(
-            'div',
-            'empty',
-            '<h1>No TV shows yet</h1><p>Name episodes like Show.Name.S01E03.mkv and they will be grouped by series.</p>'
-          )
+          'div',
+          'empty',
+          '<h1>No TV shows yet</h1><p>Name episodes like Show.Name.S01E03.mkv and they will be grouped by series.</p>'
+        )
     );
   }
 
@@ -723,6 +813,8 @@ function render() {
 /* ---------- detail modal ---------- */
 
 function closeModal() {
+  releaseImgs($('#modal'));
+
   $('#modal').classList.add('hidden');
   $('#modal').innerHTML = '';
 }
@@ -755,13 +847,7 @@ function openDetail(x) {
       <div class="mb"></div>
     </div>`;
 
-  thumb(it, 1280).then(r => {
-    if (r) {
-      const i = md.querySelector('img');
-      i.src = r.img;
-      i.classList.add('in');
-    }
-  });
+  loadImg(md.querySelector('img'), it, 960);
 
   md.onclick = e => {
     if (e.target === md) closeModal();
@@ -781,8 +867,8 @@ function openDetail(x) {
       <div class="cs">
         ${esc(x.file)}
         ${x.subs.length
-          ? ` · ${x.subs.length} subtitle file${x.subs.length > 1 ? 's' : ''}`
-          : ''}
+        ? ` · ${x.subs.length} subtitle file${x.subs.length > 1 ? 's' : ''}`
+        : ''}
       </div>`;
 
     return;
@@ -795,8 +881,8 @@ function openDetail(x) {
   body.innerHTML = `
     <select>
       ${seasons.map(s =>
-        `<option value="${s}">Season ${s}</option>`
-      ).join('')}
+    `<option value="${s}">Season ${s}</option>`
+  ).join('')}
     </select>
     <div class="eps"></div>`;
 
@@ -817,8 +903,8 @@ function openDetail(x) {
             <div>${esc(e.title)}</div>
             <small>${e.dur ? fmtD(e.dur) : ''}</small>
             ${pct(e) > 1
-              ? `<i class="pb"><u style="width:${pct(e)}%"></u></i>`
-              : ''}
+            ? `<i class="pb"><u style="width:${pct(e)}%"></u></i>`
+            : ''}
           </div>`
         );
 
@@ -852,13 +938,13 @@ function foldersModal() {
       <h2>Library folders</h2>
 
       ${folders.length
-        ? folders.map((f, i) =>
-            `<div class="fl">
+      ? folders.map((f, i) =>
+        `<div class="fl">
               <span>${esc(f)}</span>
               <button data-i="${i}">Remove</button>
             </div>`
-          ).join('')
-        : '<p class="cs">No folders added yet.</p>'}
+      ).join('')
+      : '<p class="cs">No folders added yet.</p>'}
 
       <div style="margin-top:16px">
         <button class="red" id="add3">Add folder</button>
@@ -912,35 +998,87 @@ let subsBusy = false;    // reading subtitles embedded in the video file
 let subsInfo = '';       // short status text shown in the menu
 let subTouched = false;  // user picked a subtitle manually (disables auto-select)
 
-// Subtitle text size in percent (remembered between sessions).
-let subSize = (() => {
-  const n = parseInt(localStorage.getItem('subSize'), 10);
+// Subtitle appearance (remembered between sessions).
+const DEFAULT_STYLE = { size: 100, color: 'white', bg: 'box' };
 
-  return n >= 40 && n <= 250 ? n : 100;
+const COLORS = {
+  white: '#ffffff',
+  yellow: '#ffe14d',
+  cyan: '#7df3ff',
+  green: '#8dff8d'
+};
+
+const subStyle = (() => {
+  try {
+    const s = JSON.parse(localStorage.getItem('subStyle') || '{}');
+    const legacy = parseInt(localStorage.getItem('subSize'), 10);
+    const size = s.size || legacy;
+
+    return {
+      size: size >= 40 && size <= 250 ? size : DEFAULT_STYLE.size,
+      color: COLORS[s.color] ? s.color : DEFAULT_STYLE.color,
+      bg: ['box', 'shadow', 'none'].includes(s.bg) ? s.bg : DEFAULT_STYLE.bg
+    };
+  } catch {
+    return { ...DEFAULT_STYLE };
+  }
 })();
 
 const cueStyle = document.createElement('style');
 document.head.append(cueStyle);
 
-function applySubSize() {
+function cueLook() {
+  return {
+    color: COLORS[subStyle.color],
+    background: subStyle.bg === 'box' ? 'rgba(0,0,0,.72)' : 'transparent',
+    shadow: subStyle.bg === 'shadow'
+      ? '0 0 3px #000, 0 0 6px #000, 1px 1px 2px #000, -1px -1px 2px #000'
+      : 'none'
+  };
+}
+
+function applySubStyle() {
+  const c = cueLook();
+
   // vh keeps the text proportional in a window and in fullscreen.
   cueStyle.textContent =
-    `#v::cue { font-size: ${(2.6 * subSize / 100).toFixed(2)}vh; background: #000a; }`;
+    `#v::cue { font-size: ${(2.6 * subStyle.size / 100).toFixed(2)}vh; ` +
+    `color: ${c.color}; background: ${c.background}; text-shadow: ${c.shadow}; }`;
 
   try {
-    localStorage.setItem('subSize', String(subSize));
-  } catch {}
+    localStorage.setItem('subStyle', JSON.stringify(subStyle));
+  } catch { }
 }
 
-function changeSubSize(delta) {
-  subSize = Math.max(40, Math.min(250, subSize + delta));
+const previewCss = () => {
+  const c = cueLook();
 
-  applySubSize();
+  return `font-size:${(18 * subStyle.size / 100).toFixed(1)}px;` +
+    `color:${c.color};background:${c.background};text-shadow:${c.shadow}`;
+};
 
-  if (menuOpen()) renderMenu();
+// Updates the live preview and size controls without rebuilding the menu.
+function refreshStyleUi() {
+  const p = $('#subprev');
+  if (p) p.style.cssText = previewCss();
+
+  const r = $('#szr');
+  if (r) r.value = subStyle.size;
+
+  const l = $('#szv');
+  if (l) l.textContent = subStyle.size + '%';
 }
 
-applySubSize();
+function setSubSize(n) {
+  subStyle.size = Math.max(40, Math.min(250, Math.round(n / 5) * 5));
+
+  applySubStyle();
+  refreshStyleUi();
+}
+
+const changeSubSize = d => setSubSize(subStyle.size + d);
+
+applySubStyle();
 
 const menuOpen = () => !$('#tmenu').classList.contains('hidden');
 const closeMenu = () => $('#tmenu').classList.add('hidden');
@@ -971,7 +1109,10 @@ function toVtt(t) {
   return t;
 }
 
-function addSub(label, text) {
+function addSub(rawLabel, text) {
+  const embedded = / \(embedded\)$/.test(rawLabel);
+  const label = rawLabel.replace(/ \(embedded\)$/, '');
+
   const tr = document.createElement('track');
 
   tr.kind = 'subtitles';
@@ -987,7 +1128,7 @@ function addSub(label, text) {
   v.append(tr);
   tr.track.mode = 'disabled';
 
-  subList.push({ label, el: tr });
+  subList.push({ label, src: embedded ? 'Embedded' : 'File', el: tr });
 
   return subList.length - 1;
 }
@@ -1008,7 +1149,17 @@ function applyDelay(track) {
 }
 
 function selectSub(idx, auto = false) {
-  if (!auto) subTouched = true;
+  if (!auto) {
+    subTouched = true;
+
+    // Remember the language so the next video starts with it.
+    try {
+      localStorage.setItem(
+        'subPref',
+        idx < 0 ? 'off' : baseLang(subList[idx].label)
+      );
+    } catch { }
+  }
 
   ccIdx = idx;
 
@@ -1024,7 +1175,7 @@ function selectSub(idx, auto = false) {
 
 function cycleCC() {
   if (!subList.length) {
-    flash('No subtitles loaded. Open Subs & Audio to load a file.');
+    flash('No subtitles loaded. Use “Load subtitle file…” below.', 'subs');
     return;
   }
 
@@ -1076,10 +1227,29 @@ async function loadEmbedded(it) {
     subsInfo = 'No subtitles found in this file.';
   }
 
-  // Turn on the default track automatically (like most players do).
+  // Pick a track automatically: the language used last time, otherwise the
+  // file's default track (like most players do).
   if (!subTouched && ccIdx < 0 && r.tracks.length) {
-    const d = r.tracks.findIndex(t => t.def);
-    const pick = d >= 0 ? d : (r.tracks.length === 1 ? 0 : -1);
+    const pref = localStorage.getItem('subPref');
+    let pick = -1;
+
+    if (pref !== 'off') {
+      if (pref) {
+        const same = r.tracks
+          .map((t, i) => ({ t, i }))
+          .filter(({ t }) => baseLang(t.label) === pref);
+
+        const best =
+          same.find(({ t }) => !/sign|forced|song/i.test(t.label)) || same[0];
+
+        if (best) pick = best.i;
+      }
+
+      if (pick < 0) {
+        const d = r.tracks.findIndex(t => t.def);
+        pick = d >= 0 ? d : (r.tracks.length === 1 ? 0 : -1);
+      }
+    }
 
     if (pick >= 0) selectSub(first + pick, true);
   }
@@ -1132,7 +1302,7 @@ async function pickAudio() {
 
   A.onloadedmetadata = () => {
     syncA();
-    if (!v.paused) A.play().catch(() => {});
+    if (!v.paused) A.play().catch(() => { });
   };
 
   v.muted = true;   // silence the original audio
@@ -1146,7 +1316,7 @@ A.onerror = () => {
 
   clearExt();
 
-  flash('That audio file can’t be played. Try MP3, AAC, M4A, OGG, FLAC or WAV.');
+  flash('That audio file can’t be played. Try MP3, AAC, M4A, OGG, FLAC or WAV.', 'audio');
 };
 
 function setAudioTrack(i) {
@@ -1170,16 +1340,25 @@ const toggleMute = () => {
   else v.muted = !v.muted;
 };
 
-/* ----- subtitles & audio menu ----- */
+/* ----- subtitles & audio panel ----- */
 
-function flash(text) {
+let menuTab = 'subs';     // 'subs' | 'audio' | 'style'
+let subQuery = '';
+
+function openMenu(tab) {
+  if (tab) menuTab = tab;
+
+  subQuery = '';
+
+  $('#tmenu').classList.remove('hidden');
+  renderMenu({ reveal: true });
+}
+
+function flash(text, tab) {
   note = text;
 
-  if (menuOpen()) renderMenu();
-  else {
-    $('#tmenu').classList.remove('hidden');
-    renderMenu();
-  }
+  if (!menuOpen()) openMenu(tab);
+  else renderMenu();
 
   clearTimeout(noteT);
 
@@ -1191,60 +1370,175 @@ function flash(text) {
   showCtl();
 }
 
-function renderMenu() {
-  const m = $('#tmenu');
+const baseLang = label =>
+  label
+    .replace(/\s*\((embedded|forced)\)/g, '')
+    .split(' – ')[0]
+    .trim()
+    .toLowerCase();
+
+const mrow = (act, label, on, tag) =>
+  `<button class="mi${on ? ' on' : ''}" data-a="${act}" role="menuitemradio" aria-checked="${on}">
+    <i class="dot"></i>
+    <span class="mn">${esc(label)}</span>
+    ${tag ? `<em class="tag">${tag}</em>` : ''}
+  </button>`;
+
+const stepper = (kind, val) => `
+  <div class="step">
+    <button data-a="${kind}:-0.5">−0.5</button>
+    <button data-a="${kind}:-0.1">−0.1</button>
+    <b>${fmtOff(val)}</b>
+    <button data-a="${kind}:0.1">+0.1</button>
+    <button data-a="${kind}:0.5">+0.5</button>
+    <button class="rst" data-a="${kind}:reset">Reset</button>
+  </div>`;
+
+function subsListHtml() {
+  const q = subQuery.trim().toLowerCase();
+
+  const rows = subList
+    .map((s, i) => ({ s, i }))
+    .filter(({ s }) => !q || s.label.toLowerCase().includes(q))
+    .sort((a, b) =>
+      (a.s.src === b.s.src ? 0 : a.s.src === 'File' ? -1 : 1) ||
+      a.s.label.localeCompare(b.s.label)
+    )
+    .map(({ s, i }) => mrow('s:' + i, s.label, ccIdx === i, s.src))
+    .join('');
+
+  if (rows) return rows;
+
+  return `<p class="mempty">${subsBusy
+      ? 'Reading subtitles from the video…'
+      : q
+        ? `No language matches “${esc(subQuery)}”.`
+        : esc(subsInfo || 'No subtitles found for this video.')
+    }</p>`;
+}
+
+function subsBody() {
+  const status = subList.length
+    ? (subsBusy ? 'Reading more subtitles from the video…' : subsInfo)
+    : '';
+
+  return `
+    ${mrow('s:-1', 'Off', ccIdx < 0, '')}
+    ${subList.length > 6
+      ? `<div class="msearch"><input id="subq" type="search" placeholder="Search language…" value="${esc(subQuery)}" autocomplete="off" spellcheck="false"></div>`
+      : ''}
+    <div class="mlist">${subsListHtml()}</div>
+    <div class="mfoot">
+      ${status ? `<p class="mstat">${esc(status)}</p>` : ''}
+      <button class="mbtn" data-a="s:add">Load subtitle file…</button>
+    </div>`;
+}
+
+function audioBody() {
   const at = v.audioTracks ? [...v.audioTracks] : [];
 
-  const row = (act, label, on) =>
-    `<button class="mi${on ? ' on' : ''}" data-a="${act}"><span>${esc(label)}</span></button>`;
-
-  const audioRows = at.length > 1
+  const rows = at.length > 1
     ? at.map((t, i) => {
-        const name =
-          (t.label || '') +
-          (t.language ? ` (${t.language})` : '') ||
-          `Track ${i + 1}`;
+      const name =
+        ((t.label || '') + (t.language ? ` (${t.language})` : '')).trim() ||
+        `Track ${i + 1}`;
 
-        return row('a:' + i, name.trim() || `Track ${i + 1}`, !ext && t.enabled);
-      }).join('')
-    : row('a:orig', 'Original audio', !ext);
+      return mrow('a:' + i, name, !ext && t.enabled, '');
+    }).join('')
+    : mrow('a:orig', 'Original audio', !ext, '');
+
+  return `
+    <div class="mlist">
+      ${rows}
+      ${ext ? mrow('a:ext', ext.name, true, 'File') : ''}
+    </div>
+    ${ext
+      ? `<div class="field"><label>Audio delay</label>${stepper('ad', audioDelay)}</div>`
+      : ''}
+    <div class="mfoot">
+      <button class="mbtn" data-a="a:add">Load audio file…</button>
+    </div>`;
+}
+
+function styleBody() {
+  const swatches = Object.entries(COLORS).map(([k, hex]) =>
+    `<button class="cswatch${subStyle.color === k ? ' on' : ''}" data-a="col:${k}" style="--c:${hex}" aria-label="${k}" title="${k[0].toUpperCase() + k.slice(1)}"></button>`
+  ).join('');
+
+  const seg = [['box', 'Box'], ['shadow', 'Shadow'], ['none', 'None']].map(([k, l]) =>
+    `<button class="${subStyle.bg === k ? 'on' : ''}" data-a="bg:${k}">${l}</button>`
+  ).join('');
+
+  return `
+    <div class="mscroll">
+      <div class="prev"><span id="subprev" style="${previewCss()}">This is how your subtitles look</span></div>
+
+      <div class="field">
+        <label>Size</label>
+        <div class="sizerow">
+          <button data-a="sz:-10" aria-label="Smaller">−</button>
+          <input id="szr" type="range" min="40" max="250" step="5" value="${subStyle.size}">
+          <button data-a="sz:10" aria-label="Larger">+</button>
+          <b id="szv">${subStyle.size}%</b>
+        </div>
+      </div>
+
+      <div class="field"><label>Colour</label><div class="swatches">${swatches}</div></div>
+      <div class="field"><label>Background</label><div class="seg">${seg}</div></div>
+      <div class="field"><label>Subtitle delay</label>${stepper('sd', subDelay)}</div>
+    </div>
+    <div class="mfoot">
+      <p class="mstat">Tip: press [ or ] in the player to change the size.</p>
+      <button class="mbtn ghost" data-a="st:reset">Reset appearance</button>
+    </div>`;
+}
+
+function renderMenu(opts = {}) {
+  const m = $('#tmenu');
+  const old = m.querySelector('.mlist');
+  const keep = old ? old.scrollTop : 0;
+
+  const tab = (id, label, badge) =>
+    `<button class="mtab${menuTab === id ? ' on' : ''}" role="tab" aria-selected="${menuTab === id}" data-a="tab:${id}">${label}${badge ? `<small>${badge}</small>` : ''}</button>`;
+
+  const body =
+    menuTab === 'audio' ? audioBody()
+      : menuTab === 'style' ? styleBody()
+        : subsBody();
 
   m.innerHTML = `
-    <div class="mcol">
-      <h4>Subtitles</h4>
-      ${row('s:-1', 'Off', ccIdx < 0)}
-      ${subList.map((s, i) => row('s:' + i, s.label, ccIdx === i)).join('')}
-      ${row('s:add', 'Load subtitle file…', false)}
-      ${subsBusy || subsInfo ? `<p class="tstat">${esc(subsBusy ? 'Reading subtitles from the video…' : subsInfo)}</p>` : ''}
-      <div class="sync">
-        Delay
-        <button data-a="sd:-0.5">−</button>
-        <b>${fmtOff(subDelay)}</b>
-        <button data-a="sd:0.5">+</button>
+    <div class="mhead">
+      <div class="mtabs" role="tablist">
+        ${tab('subs', 'Subtitles', subList.length || '')}
+        ${tab('audio', 'Audio', '')}
+        ${tab('style', 'Style', '')}
       </div>
-      <div class="sync">
-        Size
-        <button data-a="sz:-10">−</button>
-        <b>${subSize}%</b>
-        <button data-a="sz:10">+</button>
-      </div>
+      <button class="mclose" data-a="close" aria-label="Close">✕</button>
     </div>
-    <div class="mcol">
-      <h4>Audio</h4>
-      ${audioRows}
-      ${ext ? row('a:ext', ext.name, true) : ''}
-      ${row('a:add', 'Load audio file…', false)}
-      ${ext
-        ? `<div class="sync">
-            Delay
-            <button data-a="ad:-0.5">−</button>
-            <b>${fmtOff(audioDelay)}</b>
-            <button data-a="ad:0.5">+</button>
-          </div>`
-        : ''}
-    </div>
+    <div class="mbody">${body}</div>
     ${note ? `<p class="tnote">${esc(note)}</p>` : ''}`;
+
+  const list = m.querySelector('.mlist');
+
+  if (list) {
+    const on = list.querySelector('.on');
+
+    if (opts.reveal && on) {
+      list.scrollTop = on.offsetTop - list.clientHeight / 2 + on.offsetHeight / 2;
+    } else {
+      list.scrollTop = keep;
+    }
+  }
 }
+
+$('#tmenu').addEventListener('input', e => {
+  if (e.target.id === 'subq') {
+    subQuery = e.target.value;
+    $('#tmenu .mlist').innerHTML = subsListHtml();
+  } else if (e.target.id === 'szr') {
+    setSubSize(+e.target.value);
+  }
+});
 
 $('#tmenu').onclick = e => {
   const b = e.target.closest('[data-a]');
@@ -1253,17 +1547,47 @@ $('#tmenu').onclick = e => {
 
   const [k, val] = b.dataset.a.split(':');
 
-  if (k === 's') {
+  const step = (current, d) =>
+    d === 'reset' ? 0 : Math.round((current + +d) * 10) / 10;
+
+  if (k === 'tab') {
+    menuTab = val;
+    renderMenu({ reveal: true });
+  }
+
+  else if (k === 'close') {
+    closeMenu();
+  }
+
+  else if (k === 's') {
     if (val === 'add') pickSub();
     else selectSub(+val);
   }
 
   else if (k === 'sz') {
-    changeSubSize(+val);
+    setSubSize(subStyle.size + +val);
+  }
+
+  else if (k === 'col') {
+    subStyle.color = val;
+    applySubStyle();
+    renderMenu();
+  }
+
+  else if (k === 'bg') {
+    subStyle.bg = val;
+    applySubStyle();
+    renderMenu();
+  }
+
+  else if (k === 'st') {
+    Object.assign(subStyle, DEFAULT_STYLE);
+    applySubStyle();
+    renderMenu();
   }
 
   else if (k === 'sd') {
-    subDelay = Math.round((subDelay + +val) * 10) / 10;
+    subDelay = step(subDelay, val);
     subList.forEach(s => applyDelay(s.el.track));
     renderMenu();
   }
@@ -1275,7 +1599,7 @@ $('#tmenu').onclick = e => {
   }
 
   else if (k === 'ad') {
-    audioDelay = Math.round((audioDelay + +val) * 10) / 10;
+    audioDelay = step(audioDelay, val);
     syncA();
     renderMenu();
   }
@@ -1284,12 +1608,8 @@ $('#tmenu').onclick = e => {
 };
 
 $('#cc').onclick = () => {
-  if (menuOpen()) {
-    closeMenu();
-  } else {
-    renderMenu();
-    $('#tmenu').classList.remove('hidden');
-  }
+  if (menuOpen()) closeMenu();
+  else openMenu();
 
   showCtl();
 };
@@ -1342,7 +1662,7 @@ async function play(it, q = []) {
     }
   };
 
-  v.play().catch(() => {});
+  v.play().catch(() => { });
 
   showCtl();
 
@@ -1434,7 +1754,7 @@ v.ontimeupdate = () => {
 
   // Keep external audio locked to the video.
   if (ext && !A.paused &&
-      Math.abs(A.currentTime - (v.currentTime - audioDelay)) > 0.35) {
+    Math.abs(A.currentTime - (v.currentTime - audioDelay)) > 0.35) {
     syncA();
   }
 
@@ -1449,13 +1769,13 @@ v.onplay = v.onpause = () => {
 };
 
 // External audio follows the video.
-v.addEventListener('play', () => { if (ext) A.play().catch(() => {}); });
+v.addEventListener('play', () => { if (ext) A.play().catch(() => { }); });
 v.addEventListener('pause', () => A.pause());
 v.addEventListener('waiting', () => A.pause());
 v.addEventListener('playing', () => {
   if (ext) {
     syncA();
-    A.play().catch(() => {});
+    A.play().catch(() => { });
   }
 });
 v.addEventListener('seeked', () => { if (ext) syncA(); });
@@ -1528,8 +1848,31 @@ $('#seek').onclick = e => {
     (e.clientX - r.left) / r.width * v.duration;
 };
 
+document.querySelectorAll("[data-app]").forEach((button) => {
+  button.addEventListener("click", async () => {
+    const app = button.dataset.app;
+
+    try {
+      await api.openAppLink(app);
+    } catch (error) {
+      console.error(`Failed to open ${app}:`, error);
+    }
+  });
+});
+
 document.addEventListener('keydown', e => {
-  if (e.target.id === 'q') return;
+  // Typing in a search box, or moving a slider, must not trigger shortcuts.
+  if (e.target.matches && e.target.matches('#q, #subq')) {
+    if (e.key === 'Escape' && e.target.id === 'subq') {
+      e.target.blur();
+      closeMenu();
+    }
+
+    return;
+  }
+
+  if (e.target.type === 'range' && e.key.startsWith('Arrow')) return;
+
 
   if (P.classList.contains('hidden')) {
     if (e.key === 'Escape') closeModal();
@@ -1582,7 +1925,18 @@ async function load(r) {
   folders = r.folders;
   build(r.items);
   render();
+
+  // Once per session: drop cached thumbnails of videos that no longer exist.
+  if (!pruned && items.length) {
+    pruned = true;
+
+    const ids = new Set(items.map(i => i.id));
+
+    setTimeout(() => pruneThumbs(ids), 10000);
+  }
 }
+
+let pruned = false;
 
 async function addFolder() {
   const r = await api.addFolder();
@@ -1675,9 +2029,9 @@ api.onLibraryUpdated(library => {
     const matchingItem = previousId
       ? movies.find(m => m.id === previousId)
       : shows.find(s =>
-          s.name.toLowerCase() ===
-          previousName.toLowerCase()
-        );
+        s.name.toLowerCase() ===
+        previousName.toLowerCase()
+      );
 
     if (matchingItem) {
       featured = matchingItem;

@@ -14,7 +14,12 @@ const fsp = require('fs/promises');
 const { createReadStream } = require('fs');
 const { Readable } = require('stream');
 const crypto = require('crypto');
+const zlib = require('zlib');
+const { promisify } = require('util');
 const { spawn } = require('child_process');
+
+const gzip = promisify(zlib.gzip);
+const gunzip = promisify(zlib.gunzip);
 const chokidar = require('chokidar');
 
 // Lets the player switch between audio tracks inside a video.
@@ -80,6 +85,8 @@ let libraryWatcher = null;
 let refreshTimer = null;
 let watcherSetupPromise = Promise.resolve();
 
+const WATCHED_EXT = new Set([...Object.keys(VIDEO), ...SUB]);
+
 // Check whether a path belongs to a selected library folder.
 function isInsideFolder(filePath, folderPath) {
   const relative = path.relative(
@@ -102,8 +109,8 @@ async function loadCfg() {
     return {
       folders: Array.isArray(config.folders)
         ? config.folders.filter(
-            folder => typeof folder === 'string'
-          )
+          folder => typeof folder === 'string'
+        )
         : []
     };
   } catch {
@@ -209,7 +216,7 @@ let FFMPEG = 'ffmpeg';
 try {
   // Bundled ffmpeg (npm install ffmpeg-static). Falls back to a system ffmpeg.
   FFMPEG = require('ffmpeg-static').replace('app.asar', 'app.asar.unpacked');
-} catch {}
+} catch { }
 
 // Image-based subtitle formats can't be converted to text.
 const BITMAP_SUBS = /pgs|dvd_subtitle|dvb_subtitle|xsub/i;
@@ -322,17 +329,29 @@ async function extractSubs(file, cacheRoot) {
   const dir = path.join(cacheRoot, key);
   const manifestPath = path.join(dir, 'manifest.json');
 
+  // Subtitle files are stored compressed (about 5x smaller on disk).
+  const readVtt = async n => {
+    try {
+      const zipped = await fsp.readFile(path.join(dir, `s${n}.vtt.gz`));
+      return (await gunzip(zipped)).toString('utf8');
+    } catch { }
+
+    try {
+      return await fsp.readFile(path.join(dir, `s${n}.vtt`), 'utf8');
+    } catch {
+      return '';
+    }
+  };
+
   const readTracks = async list => {
     const tracks = [];
 
     for (const s of list) {
-      try {
-        const text = await fsp.readFile(path.join(dir, `s${s.n}.vtt`), 'utf8');
+      const text = await readVtt(s.n);
 
-        if (text.trim().length > 10) {
-          tracks.push({ label: subLabel(s), text, def: s.def });
-        }
-      } catch {}
+      if (text.trim().length > 10) {
+        tracks.push({ label: subLabel(s), text, def: s.def });
+      }
     }
 
     return tracks;
@@ -342,11 +361,14 @@ async function extractSubs(file, cacheRoot) {
   try {
     const manifest = JSON.parse(await fsp.readFile(manifestPath, 'utf8'));
 
+    // Mark as recently used so old entries can be cleaned up later.
+    fsp.utimes(dir, new Date(), new Date()).catch(() => { });
+
     return {
       tracks: await readTracks(manifest.tracks),
       skipped: manifest.skipped
     };
-  } catch {}
+  } catch { }
 
   const info = await runFfmpeg(['-hide_banner', '-i', file], 30000);
 
@@ -369,6 +391,16 @@ async function extractSubs(file, cacheRoot) {
 
   await runFfmpeg(args, 10 * 60 * 1000);
 
+  // Compress the extracted files and remove the originals.
+  for (const s of text) {
+    const file = path.join(dir, `s${s.n}.vtt`);
+
+    try {
+      await fsp.writeFile(file + '.gz', await gzip(await fsp.readFile(file)));
+      await fsp.unlink(file);
+    } catch { }
+  }
+
   const tracks = await readTracks(text);
 
   // Only cache a complete result.
@@ -390,6 +422,31 @@ function embeddedSubs(file, cacheRoot) {
   }
 
   return subJobs.get(file);
+}
+
+// Removes extracted subtitles that haven't been used for a long time.
+async function pruneSubsCache(cacheRoot, maxAgeDays = 60) {
+  let names;
+
+  try {
+    names = await fsp.readdir(cacheRoot);
+  } catch {
+    return;
+  }
+
+  const limit = Date.now() - maxAgeDays * 24 * 3600 * 1000;
+
+  for (const name of names) {
+    const dir = path.join(cacheRoot, name);
+
+    try {
+      const st = await fsp.stat(dir);
+
+      if (st.isDirectory() && st.mtimeMs < limit) {
+        await fsp.rm(dir, { recursive: true, force: true });
+      }
+    } catch { }
+  }
 }
 
 /* ---------------------------------
@@ -442,7 +499,18 @@ function setupLibraryWatcher() {
         pollInterval: 200
       },
 
-      ignored: /(^|[\/\\])\../,
+      // Only video and subtitle files are watched (fewer handles, less memory).
+      ignored: (watchedPath, stats) => {
+        const name = path.basename(watchedPath);
+
+        if (name.length > 1 && name.startsWith('.')) return true;
+
+        if (stats && stats.isFile()) {
+          return !WATCHED_EXT.has(path.extname(watchedPath).toLowerCase());
+        }
+
+        return false;
+      },
 
       ignorePermissionErrors: true
     });
@@ -491,7 +559,8 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
 
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      spellcheck: false
     }
   });
 
@@ -837,11 +906,39 @@ app.whenReady().then(async () => {
     }
   });
 
+  ipcMain.handle("external:open-app", async (event, app) => {
+    const apps = {
+      spotify: {
+        appUrl: "spotify:",
+        webUrl: "https://open.spotify.com"
+      }
+    };
+
+    const selectedApp = apps[app];
+
+    if (!selectedApp) {
+      throw new Error("Unsupported external application");
+    }
+
+    try {
+      // Try opening the installed desktop app
+      await shell.openExternal(selectedApp.appUrl);
+    } catch (error) {
+      // If the app isn't available, open the website
+      await shell.openExternal(selectedApp.webUrl);
+    }
+  });
+
   // Start watching previously selected folders.
   await setupLibraryWatcher();
 
   // Create application window.
   createWindow();
+
+  // Housekeeping a little after startup: clear stale subtitle cache.
+  setTimeout(() => {
+    pruneSubsCache(path.join(app.getPath('userData'), 'subs-cache'));
+  }, 15000);
 
   app.on('activate', () => {
     if (!BrowserWindow.getAllWindows().length) {

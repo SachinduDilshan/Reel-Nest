@@ -12,17 +12,24 @@
     "electron-builder": "^25.0.0"
   },
   "build": {
-    "appId": "local.homecinema",
-    "productName": "Home Cinema",
+    "appId": "local.reelnest",
+    "productName": "ReelNest",
+    "compression": "maximum",
+    "electronLanguages": [
+      "en-US"
+    ],
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**"
+    ],
     "files": [
-      "main.js",
-      "preload.js",
-      "index.html",
-      "style.css",
-      "renderer.js"
+      "**/*",
+      "!dist/**",
+      "!**/*.md",
+      "!**/*.map"
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "build/icon.ico"
     }
   },
   "dependencies": {
