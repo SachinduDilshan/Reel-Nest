@@ -14,7 +14,12 @@ const fsp = require('fs/promises');
 const { createReadStream } = require('fs');
 const { Readable } = require('stream');
 const crypto = require('crypto');
+const zlib = require('zlib');
+const { promisify } = require('util');
 const { spawn } = require('child_process');
+
+const gzip = promisify(zlib.gzip);
+const gunzip = promisify(zlib.gunzip);
 const chokidar = require('chokidar');
 
 // Lets the player switch between audio tracks inside a video.
@@ -79,6 +84,8 @@ let libraryWatcher = null;
 
 let refreshTimer = null;
 let watcherSetupPromise = Promise.resolve();
+
+const WATCHED_EXT = new Set([...Object.keys(VIDEO), ...SUB]);
 
 // Check whether a path belongs to a selected library folder.
 function isInsideFolder(filePath, folderPath) {
@@ -322,17 +329,29 @@ async function extractSubs(file, cacheRoot) {
   const dir = path.join(cacheRoot, key);
   const manifestPath = path.join(dir, 'manifest.json');
 
+  // Subtitle files are stored compressed (about 5x smaller on disk).
+  const readVtt = async n => {
+    try {
+      const zipped = await fsp.readFile(path.join(dir, `s${n}.vtt.gz`));
+      return (await gunzip(zipped)).toString('utf8');
+    } catch {}
+
+    try {
+      return await fsp.readFile(path.join(dir, `s${n}.vtt`), 'utf8');
+    } catch {
+      return '';
+    }
+  };
+
   const readTracks = async list => {
     const tracks = [];
 
     for (const s of list) {
-      try {
-        const text = await fsp.readFile(path.join(dir, `s${s.n}.vtt`), 'utf8');
+      const text = await readVtt(s.n);
 
-        if (text.trim().length > 10) {
-          tracks.push({ label: subLabel(s), text, def: s.def });
-        }
-      } catch {}
+      if (text.trim().length > 10) {
+        tracks.push({ label: subLabel(s), text, def: s.def });
+      }
     }
 
     return tracks;
@@ -341,6 +360,9 @@ async function extractSubs(file, cacheRoot) {
   // Already extracted earlier? Use the cache.
   try {
     const manifest = JSON.parse(await fsp.readFile(manifestPath, 'utf8'));
+
+    // Mark as recently used so old entries can be cleaned up later.
+    fsp.utimes(dir, new Date(), new Date()).catch(() => {});
 
     return {
       tracks: await readTracks(manifest.tracks),
@@ -369,6 +391,16 @@ async function extractSubs(file, cacheRoot) {
 
   await runFfmpeg(args, 10 * 60 * 1000);
 
+  // Compress the extracted files and remove the originals.
+  for (const s of text) {
+    const file = path.join(dir, `s${s.n}.vtt`);
+
+    try {
+      await fsp.writeFile(file + '.gz', await gzip(await fsp.readFile(file)));
+      await fsp.unlink(file);
+    } catch {}
+  }
+
   const tracks = await readTracks(text);
 
   // Only cache a complete result.
@@ -390,6 +422,31 @@ function embeddedSubs(file, cacheRoot) {
   }
 
   return subJobs.get(file);
+}
+
+// Removes extracted subtitles that haven't been used for a long time.
+async function pruneSubsCache(cacheRoot, maxAgeDays = 60) {
+  let names;
+
+  try {
+    names = await fsp.readdir(cacheRoot);
+  } catch {
+    return;
+  }
+
+  const limit = Date.now() - maxAgeDays * 24 * 3600 * 1000;
+
+  for (const name of names) {
+    const dir = path.join(cacheRoot, name);
+
+    try {
+      const st = await fsp.stat(dir);
+
+      if (st.isDirectory() && st.mtimeMs < limit) {
+        await fsp.rm(dir, { recursive: true, force: true });
+      }
+    } catch {}
+  }
 }
 
 /* ---------------------------------
@@ -442,7 +499,18 @@ function setupLibraryWatcher() {
         pollInterval: 200
       },
 
-      ignored: /(^|[\/\\])\../,
+      // Only video and subtitle files are watched (fewer handles, less memory).
+      ignored: (watchedPath, stats) => {
+        const name = path.basename(watchedPath);
+
+        if (name.length > 1 && name.startsWith('.')) return true;
+
+        if (stats && stats.isFile()) {
+          return !WATCHED_EXT.has(path.extname(watchedPath).toLowerCase());
+        }
+
+        return false;
+      },
 
       ignorePermissionErrors: true
     });
@@ -491,7 +559,8 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
 
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      spellcheck: false
     }
   });
 
@@ -842,6 +911,11 @@ app.whenReady().then(async () => {
 
   // Create application window.
   createWindow();
+
+  // Housekeeping a little after startup: clear stale subtitle cache.
+  setTimeout(() => {
+    pruneSubsCache(path.join(app.getPath('userData'), 'subs-cache'));
+  }, 15000);
 
   app.on('activate', () => {
     if (!BrowserWindow.getAllWindows().length) {
