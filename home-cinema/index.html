@@ -1,49 +1,122 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8">
-  <title>HomiTube</title>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; media-src media: blob:; style-src 'self' 'unsafe-inline'; connect-src 'self' media:">
+
+  <title>ReelNest</title>
+
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; img-src 'self' data: blob:; media-src media: blob:; style-src 'self' 'unsafe-inline'; connect-src 'self' media:;">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
+
+  <!-- Navigation -->
   <header id="nav">
-    <div class="logo">HomiTube</div>
+    <div class="logo">
+      REEL<span>NEST</span>
+    </div>
+
     <nav>
       <a data-v="home" class="on">Home</a>
       <a data-v="movies">Movies</a>
       <a data-v="tv">TV Shows</a>
     </nav>
+
     <div class="sp"></div>
-    <input id="q" placeholder="Search titles">
+
+    <div class="search-box">
+      <span>⌕</span>
+      <input id="q" placeholder="Search titles...">
+    </div>
+
+    <a class="external spotify" href="https://open.spotify.com" target="_blank">
+      ● Spotify
+    </a>
+
+    <a class="external youtube" href="https://www.youtube.com" target="_blank">
+      ▶ YouTube
+    </a>
+
     <button id="folders">Folders</button>
-    <button id="add" class="red">Add folder</button>
+
+    <button id="add" class="red">
+      + Add Folder
+    </button>
   </header>
 
+
+  <!-- Main Content -->
   <main id="main"></main>
+
+
+  <!-- Modal -->
   <div id="modal" class="hidden"></div>
 
+
+  <!-- Video Player -->
   <div id="player" class="hidden ui">
+
     <video id="v" crossorigin="anonymous"></video>
-    <div id="ptop"><button id="back" title="Back (Esc)">←</button><span id="ptitle"></span></div>
-    <div id="perr" class="hidden"></div>
-    <div id="pbar">
-      <div id="seek"><div id="fill"></div></div>
-      <div class="prow">
-        <button id="pp" title="Play / pause (Space)">▶</button>
-        <button id="b10" title="Back 10s (J)">−10</button>
-        <button id="f10" title="Forward 10s (L)">+10</button>
-        <button id="mute" title="Mute (M)">Vol</button>
-        <input id="vol" type="range" min="0" max="1" step="0.05" value="1">
-        <span id="time">0:00 / 0:00</span>
-        <span class="sp"></span>
-        <button id="nxt" title="Next episode (N)">Next episode</button>
-        <button id="cc" title="Subtitles (C)">CC</button>
-        <button id="spd" title="Speed">1×</button>
-        <button id="fs" title="Fullscreen (F)">Full</button>
-      </div>
+
+    <div id="ptop">
+
+      <button id="back" title="Back (Esc)">←</button>
+
+      <span id="ptitle"></span>
+
     </div>
+
+    <div id="perr" class="hidden"></div>
+
+    <div id="pbar">
+
+      <div id="seek">
+        <div id="fill"></div>
+      </div>
+
+      <div class="prow">
+
+        <button id="pp" title="Play / pause (Space)">▶</button>
+
+        <button id="b10" title="Back 10 seconds (J)">−10</button>
+
+        <button id="f10" title="Forward 10 seconds (L)">+10</button>
+
+        <button id="mute" title="Mute (M)">Vol</button>
+
+        <input id="vol" type="range" min="0" max="1" step="0.05" value="1">
+
+        <span id="time">0:00 / 0:00</span>
+
+        <span class="sp"></span>
+
+        <button id="nxt" title="Next episode (N)">
+          Next episode
+        </button>
+
+        <button id="cc" title="Subtitles and audio (C = cycle subtitles)">Subs &amp; Audio</button>
+
+        <button id="spd" title="Speed">1×</button>
+
+        <button id="fs" title="Fullscreen (F)">Full</button>
+
+      </div>
+
+    </div>
+
+    <div id="tmenu" class="hidden"></div>
+
   </div>
+
+
   <script src="renderer.js"></script>
+
 </body>
+
 </html>
