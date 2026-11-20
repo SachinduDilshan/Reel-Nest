@@ -56,7 +56,7 @@ const prog = JSON.parse(
 const saveProg = () => {
   try {
     localStorage.setItem('prog', JSON.stringify(prog));
-  } catch { }
+  } catch {}
 };
 
 const pct = it => {
@@ -187,7 +187,7 @@ try {
     indexedDB.deleteDatabase('hc');
     localStorage.setItem('hcCleaned', '1');
   }
-} catch { }
+} catch {}
 
 const idbGet = async k => {
   const d = await idb;
@@ -444,8 +444,8 @@ function card(x) {
       <div class="fb">${esc(title)}</div>
       <img alt="">
       ${x.kind !== 'show' && pct(x) > 1
-      ? `<i class="pb"><u style="width:${pct(x)}%"></u></i>`
-      : ''}
+        ? `<i class="pb"><u style="width:${pct(x)}%"></u></i>`
+        : ''}
     </div>
     <div class="ct">${esc(title)}</div>
     <div class="cs">${esc(sub)}</div>`
@@ -504,7 +504,7 @@ const sortPref = (() => {
 const saveSort = () => {
   try {
     localStorage.setItem('sort', JSON.stringify(sortPref));
-  } catch { }
+  } catch {}
 };
 
 const SORTS = {
@@ -757,11 +757,11 @@ function render() {
       res.length
         ? grid(`Results for “${query}”`, res)
         : el(
-          'div',
-          'empty',
-          `<h1>No matches</h1>
+            'div',
+            'empty',
+            `<h1>No matches</h1>
             <p>Nothing in your library matches “${esc(query)}”.</p>`
-        )
+          )
     );
 
     return;
@@ -772,10 +772,10 @@ function render() {
       movies.length
         ? grid('Movies', movies)
         : el(
-          'div',
-          'empty',
-          '<h1>No movies yet</h1><p>Files without an S01E01 style number are treated as movies.</p>'
-        )
+            'div',
+            'empty',
+            '<h1>No movies yet</h1><p>Files without an S01E01 style number are treated as movies.</p>'
+          )
     );
   }
 
@@ -784,10 +784,10 @@ function render() {
       shows.length
         ? grid('TV Shows', shows)
         : el(
-          'div',
-          'empty',
-          '<h1>No TV shows yet</h1><p>Name episodes like Show.Name.S01E03.mkv and they will be grouped by series.</p>'
-        )
+            'div',
+            'empty',
+            '<h1>No TV shows yet</h1><p>Name episodes like Show.Name.S01E03.mkv and they will be grouped by series.</p>'
+          )
     );
   }
 
@@ -867,8 +867,8 @@ function openDetail(x) {
       <div class="cs">
         ${esc(x.file)}
         ${x.subs.length
-        ? ` · ${x.subs.length} subtitle file${x.subs.length > 1 ? 's' : ''}`
-        : ''}
+          ? ` · ${x.subs.length} subtitle file${x.subs.length > 1 ? 's' : ''}`
+          : ''}
       </div>`;
 
     return;
@@ -881,8 +881,8 @@ function openDetail(x) {
   body.innerHTML = `
     <select>
       ${seasons.map(s =>
-    `<option value="${s}">Season ${s}</option>`
-  ).join('')}
+        `<option value="${s}">Season ${s}</option>`
+      ).join('')}
     </select>
     <div class="eps"></div>`;
 
@@ -903,8 +903,8 @@ function openDetail(x) {
             <div>${esc(e.title)}</div>
             <small>${e.dur ? fmtD(e.dur) : ''}</small>
             ${pct(e) > 1
-            ? `<i class="pb"><u style="width:${pct(e)}%"></u></i>`
-            : ''}
+              ? `<i class="pb"><u style="width:${pct(e)}%"></u></i>`
+              : ''}
           </div>`
         );
 
@@ -938,13 +938,13 @@ function foldersModal() {
       <h2>Library folders</h2>
 
       ${folders.length
-      ? folders.map((f, i) =>
-        `<div class="fl">
+        ? folders.map((f, i) =>
+            `<div class="fl">
               <span>${esc(f)}</span>
               <button data-i="${i}">Remove</button>
             </div>`
-      ).join('')
-      : '<p class="cs">No folders added yet.</p>'}
+          ).join('')
+        : '<p class="cs">No folders added yet.</p>'}
 
       <div style="margin-top:16px">
         <button class="red" id="add3">Add folder</button>
@@ -1047,7 +1047,7 @@ function applySubStyle() {
 
   try {
     localStorage.setItem('subStyle', JSON.stringify(subStyle));
-  } catch { }
+  } catch {}
 }
 
 const previewCss = () => {
@@ -1109,6 +1109,152 @@ function toVtt(t) {
   return t;
 }
 
+/* ----- subtitle clean-up ----- */
+
+// Fixes common subtitle problems before they are shown:
+//  - the same line repeated (duplicate layers / "growing" lines)
+//  - lines split into separate overlapping cues, which the player stacks
+//    with big gaps between them
+//  - blank lines and stray spaces inside a cue
+const vttTime = sec => {
+  const ms = Math.round(sec * 1000);
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor(ms % 3600000 / 60000);
+  const s = Math.floor(ms % 60000 / 1000);
+
+  return `${pad(h)}:${pad(m)}:${pad(s)}.${String(ms % 1000).padStart(3, '0')}`;
+};
+
+const parseTs = str => {
+  const m = /(?:(\d+):)?(\d{1,2}):(\d{2})[.,](\d{1,3})/.exec(str);
+
+  return m
+    ? (+(m[1] || 0)) * 3600 + (+m[2]) * 60 + (+m[3]) + (+m[4].padEnd(3, '0')) / 1000
+    : NaN;
+};
+
+const cleanLines = t =>
+  t
+    .replace(/\{\\[^}]*\}/g, '')          // leftover ASS style codes
+    .replace(/\\[Nn]/g, '\n')
+    .replace(/\\h/g, ' ')
+    .split('\n')
+    .map(l => l.replace(/[ \t\u00a0]+/g, ' ').trim())
+    .filter(Boolean);
+
+// Joins the lines of cues that are on screen at the same time.
+function mergeLines(list) {
+  const texts = list.map(c => c.lines.join('\n'));
+  const lines = [];
+
+  list.forEach((c, i) => {
+    // Skip a cue that repeats another one, or is the start of a longer one.
+    const dup = texts.some((o, j) =>
+      j !== i && (o === texts[i] ? j < i : o.startsWith(texts[i]))
+    );
+
+    if (dup) return;
+    if (c.lines.every(l => lines.includes(l))) return;
+
+    lines.push(...c.lines);
+  });
+
+  return lines.join('\n');
+}
+
+function cleanVtt(src) {
+  const blocks = src
+    .replace(/^\uFEFF/, '')
+    .replace(/\r\n?/g, '\n')
+    .split(/\n{2,}/);
+
+  const keep = [];     // STYLE / REGION blocks stay as they are
+  const cues = [];
+  let last = null;
+
+  blocks.forEach(block => {
+    const lines = block.split('\n');
+    const ti = lines.findIndex(l => l.includes('-->'));
+
+    if (ti >= 0) {
+      const m = /^\s*(\S+)\s*-->\s*(\S+)(.*)$/.exec(lines[ti]);
+      const s = m ? parseTs(m[1]) : NaN;
+      const e = m ? parseTs(m[2]) : NaN;
+
+      if (isNaN(s) || isNaN(e)) {
+        last = null;
+        return;
+      }
+
+      last = {
+        s,
+        e,
+        settings: m[3].trim(),
+        lines: cleanLines(lines.slice(ti + 1).join('\n')),
+        idx: cues.length
+      };
+
+      cues.push(last);
+    }
+
+    else if (/^(STYLE|REGION)\b/.test(block)) {
+      keep.push(block.trim());
+      last = null;
+    }
+
+    else if (/^(WEBVTT|NOTE)\b/.test(block)) {
+      last = null;
+    }
+
+    // Text after a blank line inside a cue (some converters write that).
+    else if (last) {
+      last.lines.push(...cleanLines(block));
+    }
+  });
+
+  const valid = cues.filter(c => c.lines.length && c.e > c.s);
+  const plain = valid.filter(c => !c.settings);
+  const special = valid.filter(c => c.settings);   // positioned cues: untouched
+
+  const times = [...new Set(plain.flatMap(c => [c.s, c.e]))].sort((a, b) => a - b);
+  const order = [...plain].sort((a, b) => a.s - b.s || a.idx - b.idx);
+
+  const out = [];
+  let next = 0;
+  let active = [];
+
+  for (let i = 0; i < times.length - 1; i++) {
+    const t = times[i];
+    const u = times[i + 1];
+
+    while (next < order.length && order[next].s <= t) active.push(order[next++]);
+
+    active = active.filter(c => c.e > t);
+
+    if (!active.length || u - t < 0.06) continue;
+
+    const text = mergeLines([...active].sort((a, b) => a.idx - b.idx));
+    const prev = out[out.length - 1];
+
+    if (prev && prev.text === text && Math.abs(prev.e - t) < 0.001) prev.e = u;
+    else out.push({ s: t, e: u, text, settings: '' });
+  }
+
+  const all = [
+    ...out,
+    ...special.map(c => ({ s: c.s, e: c.e, text: c.lines.join('\n'), settings: c.settings }))
+  ].sort((a, b) => a.s - b.s);
+
+  return (
+    'WEBVTT\n\n' +
+    (keep.length ? keep.join('\n\n') + '\n\n' : '') +
+    all
+      .map(c => `${vttTime(c.s)} --> ${vttTime(c.e)}${c.settings ? ' ' + c.settings : ''}\n${c.text}`)
+      .join('\n\n') +
+    '\n'
+  );
+}
+
 function addSub(rawLabel, text) {
   const embedded = / \(embedded\)$/.test(rawLabel);
   const label = rawLabel.replace(/ \(embedded\)$/, '');
@@ -1118,9 +1264,8 @@ function addSub(rawLabel, text) {
   tr.kind = 'subtitles';
   tr.label = label;
 
-  tr.src = URL.createObjectURL(
-    new Blob([toVtt(text)], { type: 'text/vtt' })
-  );
+  // The text is cleaned and attached only when this track is first selected,
+  // so loading a video with many languages stays instant.
 
   // Cues only exist once the track has loaded, so re-apply the delay then.
   tr.addEventListener('load', () => applyDelay(tr.track));
@@ -1128,7 +1273,7 @@ function addSub(rawLabel, text) {
   v.append(tr);
   tr.track.mode = 'disabled';
 
-  subList.push({ label, src: embedded ? 'Embedded' : 'File', el: tr });
+  subList.push({ label, src: embedded ? 'Embedded' : 'File', el: tr, raw: text });
 
   return subList.length - 1;
 }
@@ -1158,10 +1303,12 @@ function selectSub(idx, auto = false) {
         'subPref',
         idx < 0 ? 'off' : baseLang(subList[idx].label)
       );
-    } catch { }
+    } catch {}
   }
 
   ccIdx = idx;
+
+  if (idx >= 0) prepareSub(subList[idx]);
 
   subList.forEach((s, i) => {
     s.el.track.mode = i === idx ? 'showing' : 'disabled';
@@ -1171,6 +1318,17 @@ function selectSub(idx, auto = false) {
 
   updateBtn();
   if (menuOpen()) renderMenu();
+}
+
+// Prepares a subtitle track the first time it is needed.
+function prepareSub(s) {
+  if (s.raw == null) return;
+
+  s.el.src = URL.createObjectURL(
+    new Blob([cleanVtt(toVtt(s.raw))], { type: 'text/vtt' })
+  );
+
+  s.raw = null;
 }
 
 function cycleCC() {
@@ -1302,7 +1460,7 @@ async function pickAudio() {
 
   A.onloadedmetadata = () => {
     syncA();
-    if (!v.paused) A.play().catch(() => { });
+    if (!v.paused) A.play().catch(() => {});
   };
 
   v.muted = true;   // silence the original audio
@@ -1409,12 +1567,13 @@ function subsListHtml() {
 
   if (rows) return rows;
 
-  return `<p class="mempty">${subsBusy
+  return `<p class="mempty">${
+    subsBusy
       ? 'Reading subtitles from the video…'
       : q
         ? `No language matches “${esc(subQuery)}”.`
         : esc(subsInfo || 'No subtitles found for this video.')
-    }</p>`;
+  }</p>`;
 }
 
 function subsBody() {
@@ -1439,12 +1598,12 @@ function audioBody() {
 
   const rows = at.length > 1
     ? at.map((t, i) => {
-      const name =
-        ((t.label || '') + (t.language ? ` (${t.language})` : '')).trim() ||
-        `Track ${i + 1}`;
+        const name =
+          ((t.label || '') + (t.language ? ` (${t.language})` : '')).trim() ||
+          `Track ${i + 1}`;
 
-      return mrow('a:' + i, name, !ext && t.enabled, '');
-    }).join('')
+        return mrow('a:' + i, name, !ext && t.enabled, '');
+      }).join('')
     : mrow('a:orig', 'Original audio', !ext, '');
 
   return `
@@ -1488,7 +1647,6 @@ function styleBody() {
       <div class="field"><label>Subtitle delay</label>${stepper('sd', subDelay)}</div>
     </div>
     <div class="mfoot">
-      <p class="mstat">Tip: press [ or ] in the player to change the size.</p>
       <button class="mbtn ghost" data-a="st:reset">Reset appearance</button>
     </div>`;
 }
@@ -1503,8 +1661,8 @@ function renderMenu(opts = {}) {
 
   const body =
     menuTab === 'audio' ? audioBody()
-      : menuTab === 'style' ? styleBody()
-        : subsBody();
+    : menuTab === 'style' ? styleBody()
+    : subsBody();
 
   m.innerHTML = `
     <div class="mhead">
@@ -1615,10 +1773,31 @@ $('#cc').onclick = () => {
 };
 
 function resetTracks() {
+  // Hide the old cues first. Removing a track that is still "showing" can
+  // leave its last subtitle line stuck on the screen (even on the next movie).
+  [...v.textTracks].forEach(t => {
+    t.mode = 'disabled';
+  });
+
   $$('#v track').forEach(t => {
     URL.revokeObjectURL(t.src);
     t.remove();
   });
+
+  // Make the player redraw its subtitle area so nothing old stays visible.
+  const nudge = document.createElement('track');
+
+  nudge.kind = 'subtitles';
+  nudge.src = URL.createObjectURL(new Blob(['WEBVTT\n\n'], { type: 'text/vtt' }));
+
+  v.append(nudge);
+  nudge.track.mode = 'showing';
+
+  setTimeout(() => {
+    nudge.track.mode = 'disabled';
+    URL.revokeObjectURL(nudge.src);
+    nudge.remove();
+  }, 60);
 
   subList = [];
   ccIdx = -1;
@@ -1662,7 +1841,7 @@ async function play(it, q = []) {
     }
   };
 
-  v.play().catch(() => { });
+  v.play().catch(() => {});
 
   showCtl();
 
@@ -1754,7 +1933,7 @@ v.ontimeupdate = () => {
 
   // Keep external audio locked to the video.
   if (ext && !A.paused &&
-    Math.abs(A.currentTime - (v.currentTime - audioDelay)) > 0.35) {
+      Math.abs(A.currentTime - (v.currentTime - audioDelay)) > 0.35) {
     syncA();
   }
 
@@ -1769,13 +1948,13 @@ v.onplay = v.onpause = () => {
 };
 
 // External audio follows the video.
-v.addEventListener('play', () => { if (ext) A.play().catch(() => { }); });
+v.addEventListener('play', () => { if (ext) A.play().catch(() => {}); });
 v.addEventListener('pause', () => A.pause());
 v.addEventListener('waiting', () => A.pause());
 v.addEventListener('playing', () => {
   if (ext) {
     syncA();
-    A.play().catch(() => { });
+    A.play().catch(() => {});
   }
 });
 v.addEventListener('seeked', () => { if (ext) syncA(); });
@@ -1847,18 +2026,6 @@ $('#seek').onclick = e => {
   v.currentTime =
     (e.clientX - r.left) / r.width * v.duration;
 };
-
-document.querySelectorAll("[data-app]").forEach((button) => {
-  button.addEventListener("click", async () => {
-    const app = button.dataset.app;
-
-    try {
-      await api.openAppLink(app);
-    } catch (error) {
-      console.error(`Failed to open ${app}:`, error);
-    }
-  });
-});
 
 document.addEventListener('keydown', e => {
   // Typing in a search box, or moving a slider, must not trigger shortcuts.
@@ -2029,9 +2196,9 @@ api.onLibraryUpdated(library => {
     const matchingItem = previousId
       ? movies.find(m => m.id === previousId)
       : shows.find(s =>
-        s.name.toLowerCase() ===
-        previousName.toLowerCase()
-      );
+          s.name.toLowerCase() ===
+          previousName.toLowerCase()
+        );
 
     if (matchingItem) {
       featured = matchingItem;
