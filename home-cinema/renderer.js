@@ -1774,10 +1774,31 @@ $('#cc').onclick = () => {
 };
 
 function resetTracks() {
+  // Hide the old cues first. Removing a track that is still "showing" can
+  // leave its last subtitle line stuck on the screen (even on the next movie).
+  [...v.textTracks].forEach(t => {
+    t.mode = 'disabled';
+  });
+
   $$('#v track').forEach(t => {
     URL.revokeObjectURL(t.src);
     t.remove();
   });
+
+  // Make the player redraw its subtitle area so nothing old stays visible.
+  const nudge = document.createElement('track');
+
+  nudge.kind = 'subtitles';
+  nudge.src = URL.createObjectURL(new Blob(['WEBVTT\n\n'], { type: 'text/vtt' }));
+
+  v.append(nudge);
+  nudge.track.mode = 'showing';
+
+  setTimeout(() => {
+    nudge.track.mode = 'disabled';
+    URL.revokeObjectURL(nudge.src);
+    nudge.remove();
+  }, 60);
 
   subList = [];
   ccIdx = -1;
