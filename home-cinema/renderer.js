@@ -1647,7 +1647,6 @@ function styleBody() {
       <div class="field"><label>Subtitle delay</label>${stepper('sd', subDelay)}</div>
     </div>
     <div class="mfoot">
-      <p class="mstat">Tip: press [ or ] in the player to change the size.</p>
       <button class="mbtn ghost" data-a="st:reset">Reset appearance</button>
     </div>`;
 }
