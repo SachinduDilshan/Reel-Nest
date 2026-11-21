@@ -992,6 +992,8 @@ let ccIdx = -1;       // active subtitle index, -1 = off
 let subDelay = 0;     // seconds
 let ext = null;       // { name } while an external audio file is active
 let audioDelay = 0;   // seconds (positive = audio plays later)
+let audioStreams = [];   // audio tracks inside the video file (from ffmpeg)
+let audioBusy = null;    // { n, id, pct } while a track is being prepared
 let note = '';
 let noteT;
 let subsBusy = false;    // reading subtitles embedded in the video file
@@ -1446,14 +1448,11 @@ function clearExt() {
   updateBtn();
 }
 
-async function pickAudio() {
-  const r = await api.pickAudio();
+// Plays an extra audio file next to the (muted) video.
+function startExt(name, url, stream = null) {
+  ext = { name, stream };
 
-  if (!r) return;
-
-  ext = { name: r.name };
-
-  A.src = r.url;
+  A.src = url;
   A.volume = v.volume;
   A.playbackRate = v.playbackRate;
   A.muted = false;
@@ -1469,23 +1468,116 @@ async function pickAudio() {
   renderMenu();
 }
 
+async function pickAudio() {
+  const r = await api.pickAudio();
+
+  if (!r) return;
+
+  startExt(r.name, r.url);
+}
+
 A.onerror = () => {
   if (!ext) return;
 
   clearExt();
 
-  flash('That audio file can’t be played. Try MP3, AAC, M4A, OGG, FLAC or WAV.', 'audio');
+  flash('That audio can’t be played. For your own files, try MP3, AAC, M4A, OGG, FLAC or WAV.', 'audio');
 };
 
-function setAudioTrack(i) {
-  clearExt();
+// Which track the video plays by itself (we never change this one).
+function nativeAudio() {
+  const at = v.audioTracks ? [...v.audioTracks] : [];
+  const on = at.findIndex(t => t.enabled);
 
-  [...(v.audioTracks || [])].forEach((t, k) => {
-    t.enabled = k === i;
-  });
+  if (on >= 0 && on < audioStreams.length) return on;
 
-  renderMenu();
+  const d = audioStreams.findIndex(s => s.def);
+
+  return d >= 0 ? d : 0;
 }
+
+async function loadAudioList(it) {
+  let r;
+
+  try {
+    r = await api.audioList(it.id);
+  } catch {
+    r = { streams: [] };
+  }
+
+  if (cur !== it) return;
+
+  audioStreams = r.streams || [];
+
+  if (menuOpen()) renderMenu();
+}
+
+// Switching language: the chosen track is prepared as its own audio file and
+// played next to the video. The video's own audio is never switched, because
+// switching it inside the player can freeze playback.
+async function selectAudioStream(n) {
+  const it = cur;
+
+  if (!it || audioBusy) return;
+
+  // The track the video plays by itself: just un-mute it.
+  if (n === nativeAudio()) {
+    clearExt();
+    renderMenu();
+    return;
+  }
+
+  if (ext && ext.stream === n) return;
+
+  const job = { n, id: it.id, pct: 0 };
+
+  audioBusy = job;
+  renderMenu();
+
+  let r;
+
+  try {
+    r = await api.extractAudio(it.id, n);
+  } catch {
+    r = { error: 'failed' };
+  }
+
+  // The video changed or was closed meanwhile: forget this result.
+  if (audioBusy !== job) return;
+
+  audioBusy = null;
+
+  if (cur !== it) return;
+
+  if (!r.url) {
+    if (r.error !== 'cancelled') {
+      flash(
+        r.error === 'missing'
+          ? 'Switching audio needs ffmpeg. Run “npm install ffmpeg-static” in the project folder and restart.'
+          : 'Could not prepare that audio track.',
+        'audio'
+      );
+    } else {
+      renderMenu();
+    }
+
+    return;
+  }
+
+  const s = audioStreams[n];
+
+  startExt(s ? s.label : `Track ${n + 1}`, r.url, n);
+}
+
+api.onAudioProgress(p => {
+  if (!audioBusy || p.n !== audioBusy.n) return;
+
+  audioBusy.pct = p.pct;
+
+  const tag = document.querySelector(`#tmenu [data-a="a:${p.n}"] .tag`);
+
+  if (tag) tag.textContent = `Preparing… ${p.pct}%`;
+});
 
 const setVol = x => {
   v.volume = x;
@@ -1594,27 +1686,33 @@ function subsBody() {
 }
 
 function audioBody() {
-  const at = v.audioTracks ? [...v.audioTracks] : [];
+  const nat = nativeAudio();
 
-  const rows = at.length > 1
-    ? at.map((t, i) => {
-        const name =
-          ((t.label || '') + (t.language ? ` (${t.language})` : '')).trim() ||
-          `Track ${i + 1}`;
+  const rows = audioStreams.length > 1
+    ? audioStreams.map(st => {
+        const active = ext ? ext.stream === st.n : st.n === nat;
+        const busy = audioBusy && audioBusy.n === st.n;
 
-        return mrow('a:' + i, name, !ext && t.enabled, '');
+        const tag = busy
+          ? `Preparing… ${audioBusy.pct}%`
+          : esc(st.channels || '');
+
+        return mrow('a:' + st.n, st.label, active, tag);
       }).join('')
     : mrow('a:orig', 'Original audio', !ext, '');
 
   return `
     <div class="mlist">
       ${rows}
-      ${ext ? mrow('a:ext', ext.name, true, 'File') : ''}
+      ${ext && ext.stream == null ? mrow('a:ext', ext.name, true, 'File') : ''}
     </div>
     ${ext
       ? `<div class="field"><label>Audio delay</label>${stepper('ad', audioDelay)}</div>`
       : ''}
     <div class="mfoot">
+      ${audioBusy
+        ? '<p class="mstat">Preparing this track (first time only). The video keeps playing meanwhile.</p>'
+        : ''}
       <button class="mbtn" data-a="a:add">Load audio file…</button>
     </div>`;
 }
@@ -1647,6 +1745,7 @@ function styleBody() {
       <div class="field"><label>Subtitle delay</label>${stepper('sd', subDelay)}</div>
     </div>
     <div class="mfoot">
+      <p class="mstat">Tip: press [ or ] in the player to change the size.</p>
       <button class="mbtn ghost" data-a="st:reset">Reset appearance</button>
     </div>`;
 }
@@ -1753,7 +1852,7 @@ $('#tmenu').onclick = e => {
   else if (k === 'a') {
     if (val === 'add') pickAudio();
     else if (val === 'orig') { clearExt(); renderMenu(); }
-    else if (val !== 'ext') setAudioTrack(+val);
+    else if (val !== 'ext') selectAudioStream(+val);
   }
 
   else if (k === 'ad') {
@@ -1798,6 +1897,12 @@ function resetTracks() {
     URL.revokeObjectURL(nudge.src);
     nudge.remove();
   }, 60);
+
+  // Stop preparing an audio track for the previous video.
+  if (audioBusy) api.cancelAudio(audioBusy.id, audioBusy.n);
+
+  audioBusy = null;
+  audioStreams = [];
 
   subList = [];
   ccIdx = -1;
@@ -1847,6 +1952,7 @@ async function play(it, q = []) {
 
   loadSubs(it);
   loadEmbedded(it);
+  loadAudioList(it);
 }
 
 function save() {

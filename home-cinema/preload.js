@@ -8,11 +8,18 @@ contextBridge.exposeInMainWorld('api', {
   pickSubtitle: () => ipcRenderer.invoke('sub:pick'),
 
   pickAudio: () => ipcRenderer.invoke('audio:pick'),
-  
+
   embeddedSubs: filePath => ipcRenderer.invoke('subs:embedded', filePath),
 
   openAppLink: (app) => ipcRenderer.invoke("external:open-app", app),
-  
+
+  audioList: filePath => ipcRenderer.invoke('audio:list', filePath),
+  extractAudio: (filePath, n) => ipcRenderer.invoke('audio:extract', filePath, n),
+  cancelAudio: (filePath, n) => ipcRenderer.invoke('audio:cancel', filePath, n),
+  onAudioProgress: callback => {
+    ipcRenderer.on('audio:progress', (_event, p) => callback(p));
+  },
+
 
   // Get all library items.
   getLibrary: () =>
