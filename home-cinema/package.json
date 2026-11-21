@@ -1,7 +1,8 @@
 {
-  "name": "home-cinema",
+  "name": "ReelNesta",
   "version": "1.0.0",
-  "description": "Offline Netflix-style player for your local videos",
+  "description": "Your personal home cinema. Browse and watch the movies and series on your laptop, fully offline.",
+  "author": "Sachindu Dilshan Abeyrathne",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
