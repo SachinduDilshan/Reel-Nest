@@ -121,7 +121,22 @@
   </div>
 
 
-  <script src="renderer.js"></script>
+  <!-- App code. The order matters: each file may use the ones above it. -->
+  <script src="renderer/utils.js"></script>
+  <script src="renderer/state.js"></script>
+  <script src="renderer/player-state.js"></script>
+  <script src="renderer/library.js"></script>
+  <script src="renderer/thumbnails.js"></script>
+  <script src="renderer/cards.js"></script>
+  <script src="renderer/grid.js"></script>
+  <script src="renderer/pages.js"></script>
+  <script src="renderer/modals.js"></script>
+  <script src="renderer/subtitle-style.js"></script>
+  <script src="renderer/subtitles.js"></script>
+  <script src="renderer/audio.js"></script>
+  <script src="renderer/panel.js"></script>
+  <script src="renderer/player.js"></script>
+  <script src="renderer/app.js"></script>
 
 </body>
 
