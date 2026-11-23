@@ -1,64 +1,20 @@
-/* ---------------------------------
-   EMBEDDED SUBTITLES (via ffmpeg)
----------------------------------- */
+// ============================================================
+// main/subtitles.js
+// Subtitles stored inside a video file: finds them with ffmpeg, extracts them as WebVTT and caches them.
+// ============================================================
 
-let FFMPEG = 'ffmpeg';
+const path = require('path');
+const fsp = require('fs/promises');
+const crypto = require('crypto');
+const zlib = require('zlib');
+const { promisify } = require('util');
+const { runFfmpeg, langName } = require('./ffmpeg');
 
-try {
-  // Bundled ffmpeg (npm install ffmpeg-static). Falls back to a system ffmpeg.
-  FFMPEG = require('ffmpeg-static').replace('app.asar', 'app.asar.unpacked');
-} catch {}
+const gzip = promisify(zlib.gzip);
+const gunzip = promisify(zlib.gunzip);
 
 // Image-based subtitle formats can't be converted to text.
 const BITMAP_SUBS = /pgs|dvd_subtitle|dvb_subtitle|xsub/i;
-
-const LANG_B2 = {
-  fre: 'fr', ger: 'de', chi: 'zh', dut: 'nl', gre: 'el', cze: 'cs',
-  per: 'fa', rum: 'ro', slo: 'sk', may: 'ms', ice: 'is', wel: 'cy'
-};
-
-function langName(code) {
-  if (!code || code === 'und') return '';
-
-  try {
-    return new Intl.DisplayNames(['en'], { type: 'language' })
-      .of(LANG_B2[code] || code) || code;
-  } catch {
-    return code;
-  }
-}
-
-function runFfmpeg(args, timeout) {
-  return new Promise(resolve => {
-    const chunks = [];
-    let proc;
-    let done = false;
-    let missing = false;
-
-    const finish = () => {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      resolve({ err: Buffer.concat(chunks).toString(), missing });
-    };
-
-    const timer = setTimeout(() => proc && proc.kill(), timeout);
-
-    try {
-      proc = spawn(FFMPEG, args, {
-        windowsHide: true,
-        stdio: ['ignore', 'ignore', 'pipe']
-      });
-    } catch {
-      missing = true;
-      return finish();
-    }
-
-    proc.stderr.on('data', d => chunks.push(d));
-    proc.on('error', () => { missing = true; finish(); });
-    proc.on('close', finish);
-  });
-}
 
 // Reads ffmpeg's "-i" report and lists the subtitle streams in order.
 function parseSubStreams(report) {
@@ -120,17 +76,29 @@ async function extractSubs(file, cacheRoot) {
   const dir = path.join(cacheRoot, key);
   const manifestPath = path.join(dir, 'manifest.json');
 
+  // Subtitle files are stored compressed (about 5x smaller on disk).
+  const readVtt = async n => {
+    try {
+      const zipped = await fsp.readFile(path.join(dir, `s${n}.vtt.gz`));
+      return (await gunzip(zipped)).toString('utf8');
+    } catch {}
+
+    try {
+      return await fsp.readFile(path.join(dir, `s${n}.vtt`), 'utf8');
+    } catch {
+      return '';
+    }
+  };
+
   const readTracks = async list => {
     const tracks = [];
 
     for (const s of list) {
-      try {
-        const text = await fsp.readFile(path.join(dir, `s${s.n}.vtt`), 'utf8');
+      const text = await readVtt(s.n);
 
-        if (text.trim().length > 10) {
-          tracks.push({ label: subLabel(s), text, def: s.def });
-        }
-      } catch {}
+      if (text.trim().length > 10) {
+        tracks.push({ label: subLabel(s), text, def: s.def });
+      }
     }
 
     return tracks;
@@ -139,6 +107,9 @@ async function extractSubs(file, cacheRoot) {
   // Already extracted earlier? Use the cache.
   try {
     const manifest = JSON.parse(await fsp.readFile(manifestPath, 'utf8'));
+
+    // Mark as recently used so old entries can be cleaned up later.
+    fsp.utimes(dir, new Date(), new Date()).catch(() => {});
 
     return {
       tracks: await readTracks(manifest.tracks),
@@ -167,6 +138,16 @@ async function extractSubs(file, cacheRoot) {
 
   await runFfmpeg(args, 10 * 60 * 1000);
 
+  // Compress the extracted files and remove the originals.
+  for (const s of text) {
+    const file = path.join(dir, `s${s.n}.vtt`);
+
+    try {
+      await fsp.writeFile(file + '.gz', await gzip(await fsp.readFile(file)));
+      await fsp.unlink(file);
+    } catch {}
+  }
+
   const tracks = await readTracks(text);
 
   // Only cache a complete result.
@@ -189,3 +170,5 @@ function embeddedSubs(file, cacheRoot) {
 
   return subJobs.get(file);
 }
+
+module.exports = { embeddedSubs };
