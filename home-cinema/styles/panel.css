@@ -1,0 +1,341 @@
+/* ============================================================
+   panel.css
+   The Subtitles / Audio / Style panel that opens above the
+   player controls: a sheet of glass with Material tabs,
+   radio lists, chips, a slider and segmented buttons.
+   ============================================================ */
+
+#tmenu {
+  position: absolute;
+  right: 22px;
+  bottom: 134px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  width: min(440px, calc(100vw - 32px));
+  max-height: min(70vh, 600px);
+  overflow: hidden;
+  border-radius: var(--r-xl);
+  background: linear-gradient(150deg, rgba(86,62,62,.66), rgba(24,15,15,.8) 60%);
+  -webkit-backdrop-filter: blur(34px) saturate(190%);
+  backdrop-filter: blur(34px) saturate(190%);
+  box-shadow: var(--glass-rim), 0 30px 80px rgba(0,0,0,.6);
+  animation: rise var(--t-med) var(--ease);
+}
+
+/* ----- Header with tabs ----- */
+
+.mhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 12px 8px;
+}
+
+.mtabs {
+  display: flex;
+  flex: 1;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--r-full);
+  background: rgba(0,0,0,.25);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.06);
+}
+
+.mtab {
+  flex: 1;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px;
+  color: var(--md-on-surface-variant);
+  font-size: 13px;
+  font-weight: 600;
+  background: transparent;
+  box-shadow: none;
+}
+
+.mtab.on {
+  color: #fff;
+  background: var(--glass-fill-strong);
+  box-shadow: var(--glass-rim), 0 3px 10px rgba(0,0,0,.3);
+}
+
+.mtab small {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: var(--r-full);
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.mclose {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  font-size: 0;
+  border-radius: 50%;
+  color: var(--md-on-surface-variant);
+  background: transparent;
+  box-shadow: none;
+}
+
+.mclose::before {
+  content: "";
+  width: 20px;
+  height: 20px;
+  background: currentColor;
+  -webkit-mask: var(--i-close) center / contain no-repeat;
+  mask: var(--i-close) center / contain no-repeat;
+}
+
+/* ----- Body ----- */
+
+.mbody {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  padding: 0 8px;
+}
+
+.mlist,
+.mscroll {
+  position: relative;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.3) transparent;
+}
+
+.mlist { max-height: 300px; padding: 2px 0; }
+
+/* Option rows (Material radio list items) */
+.mi {
+  justify-content: flex-start;
+  gap: 14px;
+  width: 100%;
+  height: auto;
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: var(--r-md);
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
+  font-weight: 400;
+  font-size: 14px;
+}
+
+.mi.on { background: rgba(255,255,255,.07); font-weight: 600; }
+
+.dot {
+  position: relative;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.45);
+  transition: box-shadow var(--t-fast);
+}
+
+.mi.on .dot { box-shadow: inset 0 0 0 2px var(--accent); }
+
+.mi.on .dot::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 10px rgba(255,61,74,.8);
+}
+
+.mn {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Small tonal chip at the end of a row */
+.tag {
+  flex: none;
+  padding: 3px 10px;
+  border-radius: var(--r-full);
+  background: rgba(255,255,255,.12);
+  color: var(--md-on-surface-variant);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.msearch { padding: 4px 4px 8px; }
+
+.msearch input {
+  width: 100%;
+  height: 42px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--r-full);
+  outline: none;
+  background: rgba(0,0,0,.28);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.12);
+}
+
+.msearch input:focus { box-shadow: inset 0 1px 3px rgba(0,0,0,.35), inset 0 0 0 1.5px var(--md-primary); }
+
+.mempty {
+  padding: 22px 12px;
+  text-align: center;
+  color: var(--md-on-surface-variant);
+}
+
+/* ----- Footer ----- */
+
+.mfoot {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 4px 12px;
+}
+
+.mstat {
+  padding: 0 10px;
+  color: var(--md-on-surface-variant);
+  font-size: 12.5px;
+}
+
+.mbtn {
+  width: 100%;
+  height: 44px;
+  font-weight: 600;
+  background: rgba(255,255,255,.08);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.2);
+}
+
+.mbtn.ghost { color: var(--md-on-surface-variant); font-weight: 500; }
+
+.tnote {
+  margin: 0 12px 12px;
+  padding: 10px 14px;
+  border-radius: var(--r-md);
+  background: rgba(229,9,20,.16);
+  box-shadow: inset 0 0 0 1px rgba(255,100,100,.4);
+  color: #ffd3d0;
+  font-size: 13px;
+}
+
+/* ----- Style tab ----- */
+
+.prev {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 92px;
+  margin: 4px 4px 12px;
+  padding: 0 14px;
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  text-align: center;
+  background:
+    radial-gradient(70% 90% at 20% 20%, color-mix(in srgb, var(--amb-a) 70%, #000), transparent),
+    linear-gradient(135deg, #2a3548, #181d2a 60%, #2a1f35);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.1);
+}
+
+.prev span { padding: 2px 8px; line-height: 1.35; }
+
+.field { padding: 6px 12px 10px; }
+
+.field > label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--md-on-surface-variant);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.sizerow { display: flex; align-items: center; gap: 10px; }
+
+.sizerow button {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  font-size: 18px;
+}
+
+.sizerow input,
+#vol { accent-color: var(--accent); }
+
+.sizerow input { flex: 1; height: 24px; cursor: pointer; }
+
+.sizerow b {
+  width: 48px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.swatches { display: flex; gap: 14px; }
+
+.cswatch,
+.cswatch:hover {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: var(--c);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.55), inset 0 -3px 6px rgba(0,0,0,.25), 0 4px 12px rgba(0,0,0,.35);
+}
+
+.cswatch.on {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+/* Segmented buttons */
+.seg {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--r-full);
+  background: rgba(0,0,0,.25);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.06);
+}
+
+.seg button {
+  flex: 1;
+  height: 36px;
+  font-size: 13px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.seg button.on {
+  font-weight: 600;
+  background: var(--glass-fill-strong);
+  box-shadow: var(--glass-rim), 0 3px 10px rgba(0,0,0,.3);
+}
+
+/* Delay stepper */
+.step { display: flex; align-items: center; gap: 6px; }
+
+.step button {
+  height: 34px;
+  padding: 0 11px;
+  font-size: 12.5px;
+}
+
+.step b {
+  flex: 1;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.step .rst { color: var(--md-on-surface-variant); }
+
+@media (max-width: 900px) {
+  #tmenu { right: 12px; bottom: 126px; }
+}

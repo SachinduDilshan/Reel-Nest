@@ -9,6 +9,7 @@ function render() {
   const m = $('#main');
 
   releaseImgs(m);
+  resetAmbient();
 
   m.innerHTML = '';
 

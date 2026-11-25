@@ -162,6 +162,12 @@ const setVol = x => {
   $('#vol').value = x;
 };
 
+const updateMuteIcon = () =>
+  $('#mute').classList.toggle('off', (ext ? A.muted : v.muted) || v.volume === 0);
+
+v.addEventListener('volumechange', updateMuteIcon);
+A.addEventListener('volumechange', updateMuteIcon);
+
 const toggleMute = () => {
   if (ext) A.muted = !A.muted;
   else v.muted = !v.muted;

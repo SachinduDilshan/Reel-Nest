@@ -106,7 +106,7 @@ async function play(it, q = []) {
     }
   };
 
-  v.play().catch(() => {});
+  v.play().catch(() => { });
 
   showCtl();
 
@@ -199,7 +199,7 @@ v.ontimeupdate = () => {
 
   // Keep external audio locked to the video.
   if (ext && !A.paused &&
-      Math.abs(A.currentTime - (v.currentTime - audioDelay)) > 0.35) {
+    Math.abs(A.currentTime - (v.currentTime - audioDelay)) > 0.35) {
     syncA();
   }
 
@@ -209,18 +209,18 @@ v.ontimeupdate = () => {
 };
 
 v.onplay = v.onpause = () => {
-  $('#pp').textContent = v.paused ? '▶' : '⏸';
+  P.classList.toggle('paused', v.paused);
   showCtl();
 };
 
 // External audio follows the video.
-v.addEventListener('play', () => { if (ext) A.play().catch(() => {}); });
+v.addEventListener('play', () => { if (ext) A.play().catch(() => { }); });
 v.addEventListener('pause', () => A.pause());
 v.addEventListener('waiting', () => A.pause());
 v.addEventListener('playing', () => {
   if (ext) {
     syncA();
-    A.play().catch(() => {});
+    A.play().catch(() => { });
   }
 });
 v.addEventListener('seeked', () => { if (ext) syncA(); });
@@ -247,6 +247,10 @@ v.onerror = () => {
       Re-encoding it to H.264 + AAC (MP4) will fix it.
     </p>`;
 };
+
+document.addEventListener('fullscreenchange', () => {
+  $('#fs').classList.toggle('on', !!document.fullscreenElement);
+});
 
 v.onclick = () => {
   if (menuOpen()) closeMenu();

@@ -1,0 +1,93 @@
+/* ============================================================
+   tokens.css
+   The design language in one place: colours, glass, shapes,
+   motion, typography and the icon set.
+
+   Look: "Liquid glass" (frosted, light-catching surfaces floating
+   over a soft glow) with Material Design 3 building blocks
+   (colour roles, shape scale, state layers, ripples, chips).
+   ============================================================ */
+
+/* The glow behind the app. It changes with the featured title. */
+@property --amb-a { syntax: '<color>'; inherits: true; initial-value: #b3202c; }
+@property --amb-b { syntax: '<color>'; inherits: true; initial-value: #4b3bd1; }
+
+:root {
+  color-scheme: dark;
+  transition: --amb-a 1.4s ease, --amb-b 1.4s ease;
+
+  /* ----- Material 3 colour roles (dark scheme, red seed) ----- */
+  --md-primary: #ffb4ab;
+  --md-on-primary: #690005;
+  --md-primary-container: #93000a;
+  --md-on-primary-container: #ffdad6;
+  --md-secondary-container: #5d3f3c;
+  --md-on-secondary-container: #ffdad6;
+  --md-tertiary: #e6c28c;
+  --md-surface: #140c0c;
+  --md-on-surface: #f1dedc;
+  --md-on-surface-variant: #d8c2bf;
+  --md-outline: #a08c8a;
+  --md-outline-variant: #534341;
+
+  /* Brand red used for Play and progress */
+  --accent: #ff3d4a;
+  --accent-deep: #d2111f;
+
+  /* ----- Liquid glass ----- */
+  --glass-fill: linear-gradient(145deg, rgba(255,255,255,.18), rgba(255,255,255,.06) 55%, rgba(255,255,255,.11));
+  --glass-fill-strong: linear-gradient(145deg, rgba(255,255,255,.26), rgba(255,255,255,.09) 60%, rgba(255,255,255,.15));
+  --glass-dark: linear-gradient(145deg, rgba(70,48,48,.62), rgba(26,16,16,.72));
+  --glass-blur: blur(22px) saturate(180%);
+  --glass-rim: inset 0 1px 0 rgba(255,255,255,.42), inset 0 0 0 1px rgba(255,255,255,.13), inset 0 -1px 1px rgba(0,0,0,.28);
+  --glass-shadow: 0 12px 32px rgba(0,0,0,.38), 0 2px 8px rgba(0,0,0,.28);
+
+  /* ----- Shape scale ----- */
+  --r-xs: 6px;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 28px;
+  --r-2xl: 36px;
+  --r-full: 999px;
+
+  /* ----- Motion ----- */
+  --ease: cubic-bezier(.2, 0, 0, 1);
+  --t-fast: .15s;
+  --t-med: .28s;
+  --t-slow: .45s;
+
+  /* ----- Typography ----- */
+  --font: "Google Sans Text", "Roboto", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Google Sans", "Roboto Flex", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+
+  /* ----- Icons (Material icon paths, drawn through a mask) ----- */
+  --i-play: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M8 5v14l11-7z%27/%3E%3C/svg%3E");
+  --i-pause: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M6 19h4V5H6v14zm8-14v14h4V5h-4z%27/%3E%3C/svg%3E");
+  --i-back: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z%27/%3E%3C/svg%3E");
+  --i-close: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z%27/%3E%3C/svg%3E");
+  --i-search: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z%27/%3E%3C/svg%3E");
+  --i-chev-l: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z%27/%3E%3C/svg%3E");
+  --i-chev-r: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z%27/%3E%3C/svg%3E");
+  --i-chev-d: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z%27/%3E%3C/svg%3E");
+  --i-info: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z%27/%3E%3C/svg%3E");
+  --i-folder: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z%27/%3E%3C/svg%3E");
+  --i-add: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z%27/%3E%3C/svg%3E");
+  --i-home: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z%27/%3E%3C/svg%3E");
+  --i-movie: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z%27/%3E%3C/svg%3E");
+  --i-tv: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z%27/%3E%3C/svg%3E");
+  --i-skip-next: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z%27/%3E%3C/svg%3E");
+  --i-cc: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M19 4H5c-1.11 0-2 .9-2 2v12c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v1c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1zm7 0h-1.5v-.5h-2v3h2V13H18v1c0 .55-.45 1-1 1h-3c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1z%27/%3E%3C/svg%3E");
+  --i-fullscreen: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z%27/%3E%3C/svg%3E");
+  --i-fs-exit: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z%27/%3E%3C/svg%3E");
+  --i-volume: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z%27/%3E%3C/svg%3E");
+  --i-volume-off: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.796 8.796 0 0 0 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a8.99 8.99 0 0 0 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z%27/%3E%3C/svg%3E");
+  --i-replay: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z%27/%3E%3C/svg%3E");
+  --i-forward: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z%27/%3E%3C/svg%3E");
+  --i-check: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z%27/%3E%3C/svg%3E");
+  --i-arrow-up: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z%27/%3E%3C/svg%3E");
+  --i-speed: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M20.38 8.57l-1.23 1.85a8 8 0 0 1-.22 7.58H5.07A8 8 0 0 1 15.58 6.85l1.85-1.23A10 10 0 0 0 3.35 19a2 2 0 0 0 1.72 1h13.85a2 2 0 0 0 1.74-1 10 10 0 0 0-.27-10.44zm-9.79 6.84a2 2 0 0 0 2.83 0l5.66-8.49-8.49 5.66a2 2 0 0 0 0 2.83z%27/%3E%3C/svg%3E");
+  --i-play-w: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath fill=%27white%27 d=%27M8 5v14l11-7z%27/%3E%3C/svg%3E");
+  --i-chev-d-w: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath fill=%27white%27 d=%27M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z%27/%3E%3C/svg%3E");
+  --i-check-w: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath fill=%27white%27 d=%27M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z%27/%3E%3C/svg%3E");
+}
