@@ -3,7 +3,6 @@
 
 <head>
   <meta charset="utf-8">
-
   <title>ReelNest</title>
 
   <meta http-equiv="Content-Security-Policy"
@@ -11,43 +10,72 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <link rel="stylesheet" href="style.css">
+  <!-- Look and feel ("liquid glass" with Material 3 parts). Order matters. -->
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/base.css">
+  <link rel="stylesheet" href="styles/nav.css">
+  <link rel="stylesheet" href="styles/library.css">
+  <link rel="stylesheet" href="styles/modals.css">
+  <link rel="stylesheet" href="styles/player.css">
+  <link rel="stylesheet" href="styles/panel.css">
 </head>
 
 <body>
 
-  <!-- Navigation -->
+  <!-- Top bar -->
   <header id="nav">
-    <div class="logo">
-      REEL<span>NEST</span>
+    <div class="bar">
+
+      <div class="logo">
+        <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
+          <defs>
+            <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#ff7b82" />
+              <stop offset="1" stop-color="#d2111f" />
+            </linearGradient>
+          </defs>
+          <circle cx="16" cy="16" r="15" fill="url(#lg)" />
+          <circle cx="16" cy="16" r="14.5" fill="none" stroke="rgba(255,255,255,.4)" />
+          <g fill="#1a0c0d">
+            <circle cx="16" cy="7.6" r="3" />
+            <circle cx="23.3" cy="11.8" r="3" />
+            <circle cx="23.3" cy="20.2" r="3" />
+            <circle cx="16" cy="24.4" r="3" />
+            <circle cx="8.7" cy="20.2" r="3" />
+            <circle cx="8.7" cy="11.8" r="3" />
+            <circle cx="16" cy="16" r="5" />
+          </g>
+          <path d="M14.6 13.6v4.8l4-2.4z" fill="#fff" />
+        </svg>
+        <div>Reel<span>Nest</span></div>
+      </div>
+
+      <nav>
+        <a data-v="home" class="on"><span class="ic i-home"></span><span>Home</span></a>
+        <a data-v="movies"><span class="ic i-movie"></span><span>Movies</span></a>
+        <a data-v="tv"><span class="ic i-tv"></span><span>TV Shows</span></a>
+      </nav>
+
+      <div class="sp"></div>
+
+      <div class="search-box">
+        <span class="ic i-search"></span>
+        <input id="q" placeholder="Search titles" autocomplete="off" spellcheck="false">
+      </div>
+
+      <a class="external spotify" href="https://open.spotify.com" target="_blank">
+        <span class="dot"><span class="ic i-play"></span></span>Spotify
+      </a>
+
+      <a class="external youtube" href="https://www.youtube.com" target="_blank">
+        <span class="dot"><span class="ic i-play"></span></span>YouTube
+      </a>
+
+      <button id="folders"><span class="ic i-folder"></span><span>Folders</span></button>
+
+      <button id="add" class="red"><span class="ic i-add"></span><span>Add folder</span></button>
+
     </div>
-
-    <nav>
-      <a data-v="home" class="on">Home</a>
-      <a data-v="movies">Movies</a>
-      <a data-v="tv">TV Shows</a>
-    </nav>
-
-    <div class="sp"></div>
-
-    <div class="search-box">
-      <span>⌕</span>
-      <input id="q" placeholder="Search titles...">
-    </div>
-
-    <button class="external spotify" data-app="spotify">
-      ● Spotify
-    </button>
-
-    <a class="external youtube" href="https://www.youtube.com" target="_blank">
-      ▶ YouTube
-    </a>
-
-    <button id="folders">Folders</button>
-
-    <button id="add" class="red">
-      + Add Folder
-    </button>
   </header>
 
 
@@ -60,22 +88,13 @@
 
 
   <!-- Video Player -->
-  <div id="player" class="hidden ui">
+  <div id="player" class="hidden ui paused">
 
     <video id="v" crossorigin="anonymous"></video>
 
     <div id="ptop">
-
-      <button id="back" class="backbtn" title="Back (Esc)" aria-label="Back to library">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
-          stroke-linejoin="round" aria-hidden="true">
-          <path d="M15 5l-7 7 7 7" />
-        </svg>
-        <span>Back</span>
-      </button>
-
+      <button id="back" title="Back (Esc)" aria-label="Back to library"><span class="ic i-back"></span></button>
       <span id="ptitle"></span>
-
     </div>
 
     <div id="perr" class="hidden"></div>
@@ -88,29 +107,41 @@
 
       <div class="prow">
 
-        <button id="pp" title="Play / pause (Space)">▶</button>
+        <button id="pp" class="ib" title="Play / pause (Space)" aria-label="Play or pause">
+          <span class="ic i-pause"></span><span class="ic i-play"></span>
+        </button>
 
-        <button id="b10" title="Back 10 seconds (J)">−10</button>
+        <button id="b10" class="ib sk" title="Back 10 seconds (J)" aria-label="Back 10 seconds">
+          <span class="ic i-replay"></span><b>10</b>
+        </button>
 
-        <button id="f10" title="Forward 10 seconds (L)">+10</button>
+        <button id="f10" class="ib sk" title="Forward 10 seconds (L)" aria-label="Forward 10 seconds">
+          <span class="ic i-forward"></span><b>10</b>
+        </button>
 
-        <button id="mute" title="Mute (M)">Vol</button>
+        <button id="mute" class="ib" title="Mute (M)" aria-label="Mute">
+          <span class="ic i-volume"></span><span class="ic i-volume-off"></span>
+        </button>
 
-        <input id="vol" type="range" min="0" max="1" step="0.05" value="1">
+        <input id="vol" type="range" min="0" max="1" step="0.05" value="1" aria-label="Volume">
 
         <span id="time">0:00 / 0:00</span>
 
         <span class="sp"></span>
 
-        <button id="nxt" title="Next episode (N)">
-          Next episode
+        <button id="nxt" class="chip" title="Next episode (N)">
+          <span class="ic i-skip-next"></span><span>Next episode</span>
         </button>
 
-        <button id="cc" title="Subtitles and audio (C = cycle subtitles)">Subs &amp; Audio</button>
+        <button id="cc" class="chip" title="Subtitles and audio (C = cycle subtitles)">
+          <span class="ic i-cc"></span><span class="lbl">Subs &amp; Audio</span>
+        </button>
 
-        <button id="spd" title="Speed">1×</button>
+        <button id="spd" class="chip" title="Speed">1×</button>
 
-        <button id="fs" title="Fullscreen (F)">Full</button>
+        <button id="fs" class="ib" title="Fullscreen (F)" aria-label="Fullscreen">
+          <span class="ic i-fullscreen"></span><span class="ic i-fs-exit"></span>
+        </button>
 
       </div>
 
@@ -123,6 +154,8 @@
 
   <!-- App code. The order matters: each file may use the ones above it. -->
   <script src="renderer/utils.js"></script>
+  <script src="renderer/ambient.js"></script>
+  <script src="renderer/ripple.js"></script>
   <script src="renderer/state.js"></script>
   <script src="renderer/player-state.js"></script>
   <script src="renderer/library.js"></script>
@@ -137,7 +170,6 @@
   <script src="renderer/panel.js"></script>
   <script src="renderer/player.js"></script>
   <script src="renderer/app.js"></script>
-
 </body>
 
 </html>

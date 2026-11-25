@@ -8,7 +8,7 @@ const closeMenu = () => $('#tmenu').classList.add('hidden');
 const fmtOff = d => (d >= 0 ? '+' : '') + d.toFixed(1) + 's';
 const updateBtn = () => {
   $('#cc').classList.toggle('on', ccIdx >= 0 || !!ext);
-  $('#cc').textContent = subsBusy ? 'Loading subs…' : 'Subs & Audio';
+  $('#cc .lbl').textContent = subsBusy ? 'Loading subs…' : 'Subs & Audio';
 };
 
 /* ----- subtitles & audio panel ----- */
