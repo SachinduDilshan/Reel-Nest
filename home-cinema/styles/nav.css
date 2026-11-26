@@ -39,7 +39,7 @@
   align-items: center;
   gap: 10px;
   margin-right: 8px;
-  font: 700 22px/1 var(--font-display);
+  font: 700 24px/1 var(--font-display);
   letter-spacing: -.5px;
   white-space: nowrap;
 }
@@ -79,8 +79,8 @@
   padding: 0 18px 0 14px;
   border-radius: var(--r-full);
   color: var(--md-on-surface-variant);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 560;
   cursor: pointer;
   transition: color var(--t-fast), background var(--t-med) var(--ease), box-shadow var(--t-med) var(--ease);
 }
@@ -130,7 +130,7 @@
   background: transparent;
   border: 0;
   outline: none;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 #q::placeholder { color: var(--md-outline); }
@@ -144,7 +144,7 @@
   height: 40px;
   padding: 0 16px 0 12px;
   border-radius: var(--r-full);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   white-space: nowrap;
   background: var(--glass-fill);

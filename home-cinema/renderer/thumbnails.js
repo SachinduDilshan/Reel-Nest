@@ -9,6 +9,11 @@
 // IndexedDB as small JPEG files (blobs). Only the thumbnails near the screen
 // are kept in memory; the rest are released and reloaded from disk on demand.
 
+// Picture sizes (in pixels wide). Larger than the on-screen size so they stay
+// sharp on high-resolution screens (Windows scaling 125% / 150% / 200%).
+const THUMB = { card: 640, ep: 480, hero: 1600 };
+const THUMB_WIDTHS = new Set(Object.values(THUMB));
+
 const idb = new Promise(res => {
   const r = indexedDB.open('hc2', 1);
 
@@ -50,7 +55,8 @@ const idbSet = async (k, v) => {
   }
 };
 
-// Deletes cached thumbnails of videos that are no longer in the library.
+// Deletes cached thumbnails of videos that are no longer in the library,
+// and pictures of sizes that are not used any more.
 async function pruneThumbs(validIds) {
   const d = await idb;
 
@@ -66,9 +72,10 @@ async function pruneThumbs(validIds) {
     if (!c) return;
 
     const key = String(c.key);
+    const width = Number(key.slice(0, key.indexOf(':')));
     const id = key.slice(key.indexOf(':') + 1);
 
-    if (!validIds.has(id)) c.delete();
+    if (!validIds.has(id) || !THUMB_WIDTHS.has(width)) c.delete();
 
     c.continue();
   };
@@ -120,7 +127,13 @@ const grab = (it, w) => new Promise(res => {
         sy = (v.videoHeight - sh) / 2;
       }
 
-      c.getContext('2d').drawImage(
+      const g = c.getContext('2d');
+
+      // High-quality scaling: without this, shrunk pictures look jagged.
+      g.imageSmoothingEnabled = true;
+      g.imageSmoothingQuality = 'high';
+
+      g.drawImage(
         v,
         sx, sy,
         sw, sh,
@@ -133,7 +146,7 @@ const grab = (it, w) => new Promise(res => {
       c.toBlob(blob => {
         c.width = c.height = 0;          // free the canvas memory right away
         done(blob ? { blob, d } : null);
-      }, 'image/jpeg', 0.72);
+      }, 'image/jpeg', w >= 1000 ? 0.86 : 0.82);
 
     } catch {
       done(null);
@@ -149,7 +162,7 @@ const pending = new Map();     // thumbnails being prepared right now
 const failed = new Set();      // files that can't give a frame (don't retry)
 
 // Resolves to the JPEG blob of a thumbnail (creating and caching it if needed).
-function thumbBlob(it, w = 480) {
+function thumbBlob(it, w = THUMB.card) {
   const k = w + ':' + it.id;
 
   if (failed.has(k)) return Promise.resolve(null);
@@ -240,7 +253,7 @@ const io = new IntersectionObserver(es => {
   rootMargin: '400px'
 });
 
-const lazy = (img, it, w = 480) => {
+const lazy = (img, it, w = THUMB.card) => {
   img._d = { it, w, vis: false, busy: false };
   io.observe(img);
 };

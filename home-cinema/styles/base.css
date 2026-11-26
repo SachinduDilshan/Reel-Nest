@@ -17,7 +17,9 @@ html {
 body {
   min-height: 100vh;
   color: var(--md-on-surface);
-  font: 400 15px/1.5 var(--font);
+  font: 400 16px/1.5 var(--font);
+  text-rendering: optimizeLegibility;
+  font-synthesis: none;
   background: transparent;
   -webkit-font-smoothing: antialiased;
 }
@@ -36,13 +38,26 @@ body::before {
     linear-gradient(180deg, #120a0b, #0a0607);
 }
 
+/* A very fine grain over the glow: it hides the faint stripes ("banding")
+   that smooth dark gradients otherwise show, so the picture looks crisper. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: .09;
+  mix-blend-mode: soft-light;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
 a { color: inherit; text-decoration: none; }
 
 h1, h2 { font-family: var(--font-display); }
 
 h2 {
-  font-size: 22px;
-  font-weight: 600;
+  font-size: 24px;
+  font-weight: 650;
   letter-spacing: -.2px;
   margin-bottom: 8px;
 }
@@ -107,7 +122,7 @@ button {
   height: 40px;
   padding: 0 20px;
   color: var(--md-on-surface);
-  font: 500 14px/1 var(--font);
+  font: 600 15px/1 var(--font);
   letter-spacing: .1px;
   white-space: nowrap;
   cursor: pointer;
@@ -180,8 +195,8 @@ button.red:hover { box-shadow:
 .big {
   height: 52px;
   padding: 0 28px;
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 17px;
+  font-weight: 650;
 }
 
 /* Buttons created by the app get an icon in front of the text */
