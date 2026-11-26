@@ -103,8 +103,8 @@ function heroEl(x) {
     </div>`
   );
 
-  loadImg(h.querySelector('img'), it, 960);
-  thumbBlob(it, 960).then(b => b && setAmbient(b));
+  loadImg(h.querySelector('img'), it, THUMB.hero);
+  thumbBlob(it, THUMB.hero).then(b => b && setAmbient(b));
 
   const [p, i] = h.querySelectorAll('button');
 

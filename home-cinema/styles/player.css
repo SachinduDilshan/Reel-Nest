@@ -39,8 +39,8 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 19px;
+  font-weight: 620;
   pointer-events: none;
 }
 
@@ -227,10 +227,9 @@
 #time {
   margin-left: 8px;
   color: var(--md-on-surface);
-  font-size: 13px;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  opacity: .9;
 }
 
 /* Chips on the right: next episode, subs & audio, speed */
@@ -240,8 +239,8 @@
   border-radius: var(--r-full);
   background: rgba(255,255,255,.1);
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.14);
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 580;
 }
 
 .prow .chip .ic { width: 20px; height: 20px; }

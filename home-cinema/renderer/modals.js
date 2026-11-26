@@ -40,7 +40,7 @@ function openDetail(x) {
       <div class="mb"></div>
     </div>`;
 
-  loadImg(md.querySelector('img'), it, 960);
+  loadImg(md.querySelector('img'), it, THUMB.hero);
 
   md.onclick = e => {
     if (e.target === md) closeModal();
@@ -101,7 +101,7 @@ function openDetail(x) {
           </div>`
         );
 
-        lazy(r.querySelector('img'), e, 320);
+        lazy(r.querySelector('img'), e, THUMB.ep);
 
         r.onclick = () => {
           closeModal();

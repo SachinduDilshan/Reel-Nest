@@ -152,8 +152,8 @@
 .ep .ph .pb { left: 8px; right: 8px; bottom: 7px; }
 
 .ei { flex: 1; min-width: 0; }
-.ei > div:first-child { font-weight: 600; }
-.ei small { color: var(--md-on-surface-variant); }
+.ei > div:first-child { font-size: 16px; font-weight: 620; }
+.ei small { color: var(--md-on-surface-variant); font-size: 14px; }
 
 /* Folder rows */
 .fl {
