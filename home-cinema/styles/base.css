@@ -1,7 +1,6 @@
 /* ============================================================
    base.css
-   Page background, typography, scrollbars and the shared parts:
-   icons, buttons (with state layers and ripple) and form fields.
+   Page, typography, scrollbars, icons, buttons and form fields.
    ============================================================ */
 
 * {
@@ -10,79 +9,66 @@
 }
 
 html {
-  background: #0a0606;
-  scrollbar-color: rgba(255,255,255,.22) transparent;
+  background: var(--bg);
+  scrollbar-color: rgba(255, 255, 255, .2) transparent;
 }
 
 body {
   min-height: 100vh;
-  color: var(--md-on-surface);
-  font: 400 16px/1.5 var(--font);
+  color: var(--text);
+  background: var(--bg);
+  font: 400 15px/1.5 var(--font);
   text-rendering: optimizeLegibility;
-  font-synthesis: none;
-  background: transparent;
   -webkit-font-smoothing: antialiased;
+  font-synthesis: none;
+  /* Desktop apps don't select their labels by accident */
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
 }
 
-/* Soft glow behind everything: the glass surfaces pick it up. */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(60% 50% at 12% 8%, color-mix(in srgb, var(--amb-a) 58%, transparent), transparent 72%),
-    radial-gradient(50% 55% at 92% 28%, color-mix(in srgb, var(--amb-b) 42%, transparent), transparent 72%),
-    radial-gradient(70% 50% at 55% 108%, color-mix(in srgb, var(--amb-a) 32%, transparent), transparent 70%),
-    linear-gradient(180deg, #120a0b, #0a0607);
-}
+input { -webkit-user-select: text; user-select: text; }
 
-/* A very fine grain over the glow: it hides the faint stripes ("banding")
-   that smooth dark gradients otherwise show, so the picture looks crisper. */
-body::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  opacity: .09;
-  mix-blend-mode: soft-light;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-}
+::selection { background: rgba(229, 38, 47, .4); }
 
 a { color: inherit; text-decoration: none; }
 
 h1, h2 { font-family: var(--font-display); }
 
 h2 {
-  font-size: 24px;
-  font-weight: 650;
+  font-size: 18px;
+  font-weight: 600;
   letter-spacing: -.2px;
-  margin-bottom: 8px;
 }
 
 .hidden { display: none !important; }
 .sp { flex: 1; }
 
+/* ----- Scrollbars ----- */
+
 ::-webkit-scrollbar { width: 12px; height: 12px; }
 ::-webkit-scrollbar-track { background: transparent; }
+
 ::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,.2);
+  background: rgba(255, 255, 255, .16);
   border: 3px solid transparent;
   border-radius: 99px;
   background-clip: content-box;
 }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.34); background-clip: content-box; }
 
-/* ----- Icons: a coloured box shaped by the icon ----- */
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, .28);
+  background-clip: content-box;
+}
+
+/* ----- Icons: a box shaped by the icon, in the current text colour ----- */
 
 .ic,
 .ic-btn::before {
   display: inline-block;
   flex: none;
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   background: currentColor;
   -webkit-mask: var(--ic) center / contain no-repeat;
   mask: var(--ic) center / contain no-repeat;
@@ -107,105 +93,62 @@ h2 {
 .i-volume-off { --ic: var(--i-volume-off); }
 .i-replay { --ic: var(--i-replay); }
 .i-forward { --ic: var(--i-forward); }
-.i-chev-d { --ic: var(--i-chev-d); }
+.i-external { --ic: var(--i-external); }
 
-/* ----- Buttons (Material 3: state layer + ripple, on glass) ----- */
+/* ----- Buttons ----- */
 
 button {
-  position: relative;
-  overflow: hidden;
-  isolation: isolate;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  height: 40px;
-  padding: 0 20px;
-  color: var(--md-on-surface);
-  font: 600 15px/1 var(--font);
-  letter-spacing: .1px;
+  height: 36px;
+  padding: 0 14px;
+  color: var(--text);
+  font: 500 14px/1 var(--font);
   white-space: nowrap;
   cursor: pointer;
-  border: 0;
-  border-radius: var(--r-full);
-  background: var(--glass-fill);
-  box-shadow: var(--glass-rim);
-  transition: transform var(--t-fast) var(--ease), box-shadow var(--t-med) var(--ease), background var(--t-med);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast), transform var(--t-fast);
 }
 
-/* Hover / press feedback */
-button::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  background: currentColor;
-  opacity: 0;
-  transition: opacity var(--t-fast);
-  pointer-events: none;
-}
-
-button:hover::after { opacity: .09; }
-button:active::after { opacity: .15; }
-button:active { transform: scale(.97); }
+button:hover { background: var(--surface-3); border-color: var(--line-strong); }
+button:active { transform: scale(.985); }
 
 button:focus-visible,
 a:focus-visible,
-select:focus-visible,
-input:focus-visible {
-  outline: 2px solid var(--md-primary);
+select:focus-visible {
+  outline: 2px solid var(--accent-text);
   outline-offset: 2px;
 }
 
-/* Ripple (added by ripple.js) */
-.rpl {
-  position: absolute;
-  z-index: 0;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: .22;
-  transform: scale(0);
-  pointer-events: none;
-  animation: rpl .6s var(--ease) forwards;
-}
-
-@keyframes rpl {
-  to { transform: scale(1); opacity: 0; }
-}
-
-/* Filled button: the vivid red, as lit glass */
+/* Primary button: flat accent colour */
 button.red {
   color: #fff;
   font-weight: 600;
-  background: linear-gradient(180deg, #ff6a72 0%, #f02e3b 48%, #c8101f 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.6),
-    inset 0 0 0 1px rgba(255,255,255,.18),
-    inset 0 -3px 8px rgba(110,0,10,.5),
-    0 10px 28px rgba(229,9,20,.42);
+  background: var(--accent);
+  border-color: transparent;
 }
 
-button.red:hover { box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.7),
-    inset 0 0 0 1px rgba(255,255,255,.22),
-    inset 0 -3px 8px rgba(110,0,10,.5),
-    0 14px 34px rgba(229,9,20,.55); }
+button.red:hover { background: var(--accent-hover); }
+button.red:active { background: var(--accent-press); }
 
 .big {
-  height: 52px;
-  padding: 0 28px;
-  font-size: 17px;
-  font-weight: 650;
+  height: 44px;
+  padding: 0 20px;
+  font-size: 15px;
+  font-weight: 600;
 }
 
-/* Buttons created by the app get an icon in front of the text */
+/* Buttons built by the app get an icon in front of the text */
 button.red.big::before,
 .hero .btns .big:not(.red)::before {
   content: "";
-  width: 24px;
-  height: 24px;
-  margin-left: -6px;
+  width: 18px;
+  height: 18px;
+  margin-left: -2px;
   background: currentColor;
   -webkit-mask: var(--i-play) center / contain no-repeat;
   mask: var(--i-play) center / contain no-repeat;
@@ -225,26 +168,64 @@ select {
 }
 
 select {
-  appearance: none;
   -webkit-appearance: none;
-  height: 40px;
-  padding: 0 38px 0 16px;
+  appearance: none;
+  height: 36px;
+  padding: 0 34px 0 12px;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
-  border: 0;
-  border-radius: var(--r-full);
-  background:
-    var(--i-chev-d-w) right 10px center / 20px no-repeat,
-    var(--glass-fill);
-  background-blend-mode: normal;
-  box-shadow: var(--glass-rim);
-  transition: box-shadow var(--t-med) var(--ease);
+  background: var(--i-chev-d-w) right 10px center / 16px no-repeat, var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  transition: border-color var(--t-fast), background-color var(--t-fast);
 }
 
-select:hover { box-shadow: var(--glass-rim), 0 0 0 4px rgba(255,255,255,.06); }
+select:hover { border-color: var(--line-strong); }
 
 select option {
-  background: #231a1a;
-  color: var(--md-on-surface);
+  background: var(--surface);
+  color: var(--text);
+}
+
+/* ----- Sliders ----- */
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 20px;
+  cursor: pointer;
+  background: transparent;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  background: rgba(255, 255, 255, .24);
+  border-radius: 4px;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  background: #fff;
+  border: 0;
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .5);
+  transition: transform var(--t-fast);
+}
+
+input[type="range"]:hover::-webkit-slider-thumb { transform: scale(1.15); }
+
+input[type="range"]:focus-visible { outline-offset: 4px; }
+
+@keyframes pop {
+  from { opacity: 0; transform: translateY(6px) scale(.985); }
+}
+
+@keyframes fade {
+  from { opacity: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {

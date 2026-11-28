@@ -104,7 +104,6 @@ function heroEl(x) {
   );
 
   loadImg(h.querySelector('img'), it, THUMB.hero);
-  thumbBlob(it, THUMB.hero).then(b => b && setAmbient(b));
 
   const [p, i] = h.querySelectorAll('button');
 
