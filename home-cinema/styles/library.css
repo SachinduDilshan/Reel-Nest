@@ -1,19 +1,20 @@
 /* ============================================================
    library.css
-   The pages you browse: featured banner, rows of cards, grids
-   with their toolbar, and the empty state.
+   The pages you browse: hero banner, carousel rows, cards,
+   grids with their toolbar, and the empty state.
    ============================================================ */
 
-/* ----- Featured banner ----- */
+/* ----- Hero ----- */
 
 .hero {
   position: relative;
-  height: clamp(380px, 58vh, 580px);
-  margin: var(--pad) var(--pad) 0;
+  height: min(72vh, 700px);
+  min-height: 460px;
+  margin: 96px 22px 0;
   overflow: hidden;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r-4);
+  border-radius: var(--r-2xl);
+  background: linear-gradient(135deg, #2a1517, #120a0b);
+  box-shadow: 0 30px 80px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.1);
 }
 
 .hero img {
@@ -23,72 +24,81 @@
   height: 100%;
   object-fit: cover;
   opacity: 0;
-  transition: opacity .6s var(--ease);
+  transition: opacity 1s var(--ease);
 }
 
 .hero img.in { opacity: 1; }
 
-/* Darkens the picture where the text sits */
 .hero::after {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(90deg, rgba(10,10,12,.9) 0%, rgba(10,10,12,.6) 36%, transparent 72%),
-    linear-gradient(0deg, rgba(10,10,12,.85) 0%, transparent 50%);
+    linear-gradient(90deg, rgba(10,6,6,.78) 0%, rgba(10,6,6,.35) 42%, transparent 72%),
+    linear-gradient(0deg, rgba(10,6,6,.7) 0%, transparent 46%);
 }
 
+/* The info card: a pane of glass over the picture */
 .hero .hc {
   position: absolute;
   z-index: 2;
-  left: 40px;
-  bottom: 40px;
+  left: 30px;
+  bottom: 30px;
   max-width: 560px;
+  padding: 26px 30px 30px;
+  border-radius: var(--r-xl);
+  background:
+    linear-gradient(145deg, rgba(255,255,255,.17), rgba(255,255,255,.04) 60%, rgba(255,255,255,.08)),
+    rgba(16,9,9,.4);
+  -webkit-backdrop-filter: blur(26px) saturate(190%);
+  backdrop-filter: blur(26px) saturate(190%);
+  box-shadow: var(--glass-rim), 0 24px 60px rgba(0,0,0,.45);
 }
 
 .hero h1 {
-  margin-bottom: 8px;
-  font-size: clamp(30px, 3.4vw, 46px);
+  margin-bottom: 14px;
+  font-size: clamp(32px, 4vw, 54px);
   font-weight: 700;
-  line-height: 1.08;
-  letter-spacing: -1.2px;
+  line-height: 1.04;
+  letter-spacing: -1.5px;
+  text-shadow: 0 2px 24px rgba(0,0,0,.45);
 }
 
 .meta {
-  display: block;
-  margin-bottom: 22px;
-  color: var(--text-2);
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  height: 30px;
+  margin-bottom: 20px;
+  padding: 0 12px;
+  border-radius: var(--r-full);
+  background: rgba(255,255,255,.14);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.12);
+  color: var(--md-on-surface);
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 560;
 }
 
-.hero .btns { display: flex; gap: 10px; }
-
-/* More info: a quiet button on the picture */
-.hero .btns .big:not(.red) {
-  background: rgba(255, 255, 255, .14);
-  border-color: transparent;
-}
-
-.hero .btns .big:not(.red):hover { background: rgba(255, 255, 255, .22); }
+.hero .btns { display: flex; flex-wrap: wrap; gap: 12px; }
 
 /* ----- Rows ----- */
 
 .row,
 .gridw {
   position: relative;
-  padding: 0 var(--pad);
-  margin-top: 36px;
+  padding: 0 28px;
+  margin-top: 30px;
 }
 
-.row h2 { margin-bottom: 14px; }
+.sw { position: relative; }
 
 .scr {
   display: flex;
+  align-items: flex-start;
   gap: 16px;
-  margin: 0 calc(var(--pad) * -1);
-  padding: 0 var(--pad) 4px;
+  margin: 0 -18px;
+  padding: 16px 18px 36px;
   overflow-x: auto;
   scroll-behavior: smooth;
   scrollbar-width: none;
@@ -96,21 +106,31 @@
 
 .scr::-webkit-scrollbar { display: none; }
 
-/* Scroll buttons sit at the right of the row title */
+/* Carousel arrows: round glass buttons */
 .ar {
   position: absolute;
-  top: -3px;
-  width: 32px;
-  height: 32px;
+  top: 16px;
+  bottom: auto;
+  z-index: 5;
+  width: 48px;
+  height: 48px;
   padding: 0;
   font-size: 0;
+  border-radius: 50%;
+  opacity: 0;
+  transform: scale(.85);
+  background: var(--glass-fill-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-rim), var(--glass-shadow);
+  transition: opacity var(--t-med), transform var(--t-med) var(--ease);
 }
 
 .ar::before {
   content: "";
-  width: 18px;
-  height: 18px;
-  background: currentColor;
+  width: 28px;
+  height: 28px;
+  background: #fff;
   -webkit-mask: var(--i-chev-l) center / contain no-repeat;
   mask: var(--i-chev-l) center / contain no-repeat;
 }
@@ -120,27 +140,37 @@
   mask-image: var(--i-chev-r);
 }
 
-.ar.r { right: var(--pad); }
-.ar.l { right: calc(var(--pad) + 40px); }
+.ar.l { left: -14px; }
+.ar.r { right: -14px; }
+.sw:hover .ar { opacity: 1; transform: scale(1); }
 
 /* ----- Cards ----- */
 
 .card {
   position: relative;
-  flex: 0 0 260px;
-  width: 260px;
+  flex: 0 0 270px;
+  width: 270px;
   min-width: 0;
   cursor: pointer;
+  transition: transform var(--t-med) var(--ease);
 }
 
 .grid .card { flex: auto; width: auto; }
+
+.card:hover { transform: translateY(-6px); }
 
 .ph {
   position: relative;
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  background: var(--surface);
-  border-radius: var(--r-3);
+  border-radius: var(--r-lg);
+  background: linear-gradient(135deg, rgba(255,255,255,.1), rgba(255,255,255,.03));
+  box-shadow: 0 10px 24px rgba(0,0,0,.42), inset 0 0 0 1px rgba(255,255,255,.1);
+  transition: box-shadow var(--t-med) var(--ease);
+}
+
+.card:hover .ph {
+  box-shadow: 0 18px 40px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.2), 0 0 36px color-mix(in srgb, var(--amb-a) 40%, transparent);
 }
 
 .ph img {
@@ -150,41 +180,29 @@
   height: 100%;
   object-fit: cover;
   opacity: 0;
-  transition: opacity .35s, transform .5s var(--ease);
+  transition: opacity .4s, transform .6s var(--ease);
 }
 
 .ph img.in { opacity: 1; }
-.card:hover .ph img { transform: scale(1.04); }
+.card:hover .ph img { transform: scale(1.06); }
 
-/* A fine edge around every picture */
-.ph::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  border-radius: inherit;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .09);
-  pointer-events: none;
-  transition: box-shadow var(--t-med);
-}
-
-.card:hover .ph::before { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .4); }
-
-/* Play icon on hover */
+/* A play button appears on hover */
 .ph::after {
   content: "";
   position: absolute;
   z-index: 2;
   left: 50%;
   top: 50%;
-  width: 44px;
-  height: 44px;
-  margin: -22px 0 0 -22px;
+  width: 56px;
+  height: 56px;
+  margin: -28px 0 0 -28px;
   border-radius: 50%;
-  background: var(--i-play-w) 56% 50% / 18px no-repeat, rgba(0, 0, 0, .55);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .25);
+  background: var(--i-play-w) 54% 50% / 26px no-repeat, var(--glass-fill-strong);
+  -webkit-backdrop-filter: blur(14px) saturate(170%);
+  backdrop-filter: blur(14px) saturate(170%);
+  box-shadow: var(--glass-rim), 0 8px 24px rgba(0,0,0,.4);
   opacity: 0;
-  transform: scale(.9);
+  transform: scale(.8);
   transition: opacity var(--t-med), transform var(--t-med) var(--ease);
   pointer-events: none;
 }
@@ -192,7 +210,7 @@
 .card:hover .ph::after,
 .ep:hover .ph::after { opacity: 1; transform: scale(1); }
 
-/* Title shown while the picture is not ready */
+/* Title shown while there is no picture yet */
 .fb {
   position: absolute;
   inset: 0;
@@ -200,62 +218,65 @@
   align-items: center;
   justify-content: center;
   padding: 14px;
-  color: var(--text-3);
-  font-weight: 600;
   text-align: center;
+  color: var(--md-on-surface-variant);
+  font-weight: 600;
 }
 
 .ct {
-  margin-top: 10px;
+  margin-top: 12px;
   overflow: hidden;
-  font-size: 14.5px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 620;
+  letter-spacing: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .cs {
   overflow: hidden;
-  color: var(--text-2);
-  font-size: 13px;
+  color: var(--md-on-surface-variant);
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* Watch progress */
+/* Watch progress (Material linear progress) */
 .pb {
   display: block;
-  height: 3px;
+  height: 4px;
   margin-top: 8px;
   overflow: hidden;
-  background: rgba(255, 255, 255, .22);
-  border-radius: 3px;
+  border-radius: 4px;
+  background: rgba(255,255,255,.22);
 }
 
 .pb u {
   display: block;
   height: 100%;
-  background: var(--accent);
+  border-radius: 4px;
+  background: linear-gradient(90deg, #ff7078, var(--accent));
+  box-shadow: 0 0 10px rgba(255,61,74,.8);
 }
 
 .ph .pb {
   position: absolute;
   z-index: 3;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: 12px;
+  right: 12px;
+  bottom: 10px;
   margin: 0;
-  border-radius: 0;
 }
 
 /* ----- Grid pages and their toolbar ----- */
 
-.gridw.top { padding-top: var(--pad); margin-top: 0; }
+.gridw.top { padding-top: 98px; }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 28px 16px;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 30px 18px;
+  padding-top: 14px;
 }
 
 .gh {
@@ -264,22 +285,23 @@
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  margin-bottom: 22px;
+  margin-bottom: 8px;
 }
 
 .gh h2 {
-  font-size: 28px;
+  margin: 0;
+  font-size: 32px;
   font-weight: 700;
-  letter-spacing: -.7px;
+  letter-spacing: -.6px;
 }
 
 .tools {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  color: var(--text-2);
-  font-size: 13px;
+  gap: 10px;
+  color: var(--md-on-surface-variant);
+  font-size: 14px;
 }
 
 .tools label {
@@ -288,7 +310,7 @@
   gap: 8px;
 }
 
-.tools .sd { min-width: 112px; }
+.tools .sd { min-width: 128px; }
 
 .nomatch { padding: 48px 0; text-align: center; }
 
@@ -300,22 +322,24 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14px;
+  gap: 16px;
   padding: 0 24px;
   text-align: center;
 }
 
 .empty h1 {
-  font-size: 26px;
+  font-size: 36px;
   font-weight: 700;
-  letter-spacing: -.5px;
+  letter-spacing: -1px;
 }
 
 .empty p {
-  max-width: 460px;
-  color: var(--text-2);
+  max-width: 480px;
+  color: var(--md-on-surface-variant);
 }
 
-@media (max-width: 1100px) {
-  .hero .hc { left: 28px; bottom: 28px; }
+@media (max-width: 900px) {
+  .hero { margin: 92px 12px 0; }
+  .hero .hc { left: 14px; right: 14px; bottom: 14px; padding: 20px; }
+  .row, .gridw { padding: 0 16px; }
 }

@@ -10,7 +10,7 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- Look and feel. Order matters. -->
+  <!-- Look and feel ("liquid glass" with Material 3 parts). Order matters. -->
   <link rel="stylesheet" href="styles/tokens.css">
   <link rel="stylesheet" href="styles/base.css">
   <link rel="stylesheet" href="styles/nav.css">
@@ -22,57 +22,61 @@
 
 <body>
 
-  <!-- Sidebar -->
-  <aside id="nav">
+  <!-- Top bar -->
+  <header id="nav">
+    <div class="bar">
 
-    <div class="brand">
-      <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
-        <circle cx="16" cy="16" r="15" fill="#e5262f" />
-        <g fill="#0a0a0c">
-          <circle cx="16" cy="7.6" r="3" />
-          <circle cx="23.3" cy="11.8" r="3" />
-          <circle cx="23.3" cy="20.2" r="3" />
-          <circle cx="16" cy="24.4" r="3" />
-          <circle cx="8.7" cy="20.2" r="3" />
-          <circle cx="8.7" cy="11.8" r="3" />
-          <circle cx="16" cy="16" r="5" />
-        </g>
-        <path d="M14.6 13.6v4.8l4-2.4z" fill="#fff" />
-      </svg>
-      <div>Reel<b>Nest</b></div>
-    </div>
+      <div class="logo">
+        <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
+          <defs>
+            <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#ff7b82" />
+              <stop offset="1" stop-color="#d2111f" />
+            </linearGradient>
+          </defs>
+          <circle cx="16" cy="16" r="15" fill="url(#lg)" />
+          <circle cx="16" cy="16" r="14.5" fill="none" stroke="rgba(255,255,255,.4)" />
+          <g fill="#1a0c0d">
+            <circle cx="16" cy="7.6" r="3" />
+            <circle cx="23.3" cy="11.8" r="3" />
+            <circle cx="23.3" cy="20.2" r="3" />
+            <circle cx="16" cy="24.4" r="3" />
+            <circle cx="8.7" cy="20.2" r="3" />
+            <circle cx="8.7" cy="11.8" r="3" />
+            <circle cx="16" cy="16" r="5" />
+          </g>
+          <path d="M14.6 13.6v4.8l4-2.4z" fill="#fff" />
+        </svg>
+        <div>Reel<span>Nest</span></div>
+      </div>
 
-    <label class="search-box">
-      <span class="ic i-search"></span>
-      <input id="q" placeholder="Search" autocomplete="off" spellcheck="false" aria-label="Search titles">
-    </label>
+      <nav>
+        <a data-v="home" class="on"><span class="ic i-home"></span><span>Home</span></a>
+        <a data-v="movies"><span class="ic i-movie"></span><span>Movies</span></a>
+        <a data-v="tv"><span class="ic i-tv"></span><span>TV Shows</span></a>
+      </nav>
 
-    <nav aria-label="Main">
-      <a data-v="home" class="on"><span class="ic i-home"></span><span>Home</span></a>
-      <a data-v="movies"><span class="ic i-movie"></span><span>Movies</span></a>
-      <a data-v="tv"><span class="ic i-tv"></span><span>TV Shows</span></a>
-    </nav>
+      <div class="sp"></div>
 
-    <div class="group">
-      <div class="label">Library</div>
-      <button id="folders"><span class="ic i-folder"></span><span>Manage folders</span></button>
-    </div>
-
-    <div class="group">
-      <div class="label">Browse</div>
-
-      <a class="external youtube" href="https://www.youtube.com" target="_blank">
-        <span class="dot"></span><span>YouTube</span><span class="ic i-external"></span>
-      </a>
+      <div class="search-box">
+        <span class="ic i-search"></span>
+        <input id="q" placeholder="Search titles" autocomplete="off" spellcheck="false">
+      </div>
 
       <a class="external spotify" href="https://open.spotify.com" target="_blank">
-        <span class="dot"></span><span>Spotify</span><span class="ic i-external"></span>
+        <span class="dot"><span class="ic i-play"></span></span>Spotify
       </a>
+
+      <a class="external youtube" href="https://www.youtube.com" target="_blank">
+        <span class="dot"><span class="ic i-play"></span></span>YouTube
+      </a>
+
+      <button id="folders"><span class="ic i-folder"></span><span>Folders</span></button>
+
+      <button id="add" class="red"><span class="ic i-add"></span><span>Add folder</span></button>
+
     </div>
-
-    <button id="add" class="red"><span class="ic i-add"></span><span>Add folder</span></button>
-
-  </aside>
+  </header>
 
 
   <!-- Main Content -->
@@ -150,6 +154,8 @@
 
   <!-- App code. The order matters: each file may use the ones above it. -->
   <script src="renderer/utils.js"></script>
+  <script src="renderer/ambient.js"></script>
+  <script src="renderer/ripple.js"></script>
   <script src="renderer/state.js"></script>
   <script src="renderer/player-state.js"></script>
   <script src="renderer/library.js"></script>
